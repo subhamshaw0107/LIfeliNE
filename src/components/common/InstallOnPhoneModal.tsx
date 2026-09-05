@@ -9,7 +9,7 @@ interface Props {
 export const InstallOnPhoneModal: React.FC<Props> = ({ onClose }) => {
   const [copiedPublic, setCopiedPublic] = useState(false);
   const [copiedWifi, setCopiedWifi] = useState(false);
-  const publicUrl = 'https://9f642cf2b630b7.lhr.life';
+  const publicUrl = 'https://subhamshaw0107.github.io/LIfeliNE/';
   const localWifiUrl = 'http://10.139.11.1:5173/';
   // Public QR code URL generator for easy scanning
   const qrCodeImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(publicUrl)}&bgcolor=0B0F19&color=38BDF8`;
