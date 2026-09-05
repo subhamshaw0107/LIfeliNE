@@ -1,0 +1,26 @@
+name: lifeline_rescue_network
+description: Offline Disaster Rescue Network - Store-Carry-Forward Mesh & Authenticated SOS
+version: 1.0.0+1
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_local_notifications: ^17.0.0
+  google_maps_flutter: ^2.5.0
+  geolocator: ^11.0.0
+  pointycastle: ^3.7.3 # AES-GCM 256 Authenticated Encryption
+  cryptography: ^2.7.0
+  sqflite: ^2.3.0 # Local Offline Database
+  shared_preferences: ^2.2.0
+  uuid: ^4.0.0
+  audioplayers: ^5.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true

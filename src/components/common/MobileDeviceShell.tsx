@@ -1,0 +1,335 @@
+import React, { useState } from 'react';
+import { useApp } from '../../context/AppContext';
+import { VictimHome } from '../victim/VictimHome';
+import { EmergencyChat } from '../victim/EmergencyChat';
+import { MeshRadar } from '../victim/MeshRadar';
+import { TacticalMap } from '../map/TacticalMap';
+import { RescueDashboard } from '../rescue/RescueDashboard';
+import { LoginScreen } from '../auth/LoginScreen';
+import { RedZoneEmergencyModal } from './RedZoneEmergencyModal';
+import {
+  Home,
+  Map,
+  MessageSquare,
+  AlertOctagon,
+  Settings,
+  Radio,
+  ShieldCheck,
+  LogOut,
+  RefreshCw,
+  Smartphone,
+  ShieldAlert
+} from 'lucide-react';
+
+interface Props {
+  forcedRole?: 'VICTIM' | 'RESCUE_TEAM';
+  deviceTitle?: string;
+}
+
+type VictimTab = 'HOME' | 'MESH' | 'MAP' | 'MESSAGES' | 'SOS' | 'PROFILE';
+type RescueTab = 'DASHBOARD' | 'MAP' | 'SOS' | 'MESH';
+
+export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle }) => {
+  const { user, role: contextRole, setRole, logout, syncPending, syncWithCloud, redZoneSosPopup, setRedZoneSosPopup } = useApp();
+  const activeRole = forcedRole || contextRole;
+
+  // Active Tab states
+  const [victimTab, setVictimTab] = useState<VictimTab>('HOME');
+  const [rescueTab, setRescueTab] = useState<RescueTab>('DASHBOARD');
+  const [inspectedSosId, setInspectedSosId] = useState<string | null>(null);
+
+  // Time state for status bar
+  const [timeStr, setTimeStr] = useState(() => {
+    const d = new Date();
+    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+  });
+
+  React.useEffect(() => {
+    const t = setInterval(() => {
+      const d = new Date();
+      setTimeStr(`${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`);
+    }, 10000);
+    return () => clearInterval(t);
+  }, []);
+
+  if (!user) {
+    return (
+      <div className="smartphone-chassis">
+        <div className="phone-top-bar">
+          <span>{timeStr}</span>
+          <div className="phone-dynamic-island">
+            <div className="island-camera-lens"></div>
+            <div className="island-sensor"></div>
+          </div>
+          <span>5G • 88%</span>
+        </div>
+        <div className="phone-screen-content" style={{ paddingBottom: 0 }}>
+          <LoginScreen />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="smartphone-chassis">
+      {/* Phone Hardware Top Status Bar */}
+      <div className="phone-top-bar">
+        <span>{timeStr}</span>
+        <div className="phone-dynamic-island">
+          <div className="island-camera-lens"></div>
+          <div className="island-sensor"></div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {syncPending && (
+            <RefreshCw size={11} className="animate-spin" color="#38BDF8" />
+          )}
+          <span style={{ fontSize: 10, fontFamily: 'monospace' }}>
+            {activeRole === 'VICTIM' ? 'DEV-A8F31C' : 'TACTICAL-HQ'}
+          </span>
+        </div>
+      </div>
+
+      {/* Top Role Switcher Header inside Mobile Section */}
+      {!forcedRole && (
+        <div className="phone-role-switcher-bar">
+          <div className="role-switcher-group">
+            <button
+              className={`role-tab-btn ${activeRole === 'VICTIM' ? 'active' : ''}`}
+              onClick={() => setRole('VICTIM')}
+            >
+              <Smartphone size={13} />
+              <span>Victim Phone</span>
+            </button>
+            <button
+              className={`role-tab-btn rescue ${activeRole === 'RESCUE_TEAM' ? 'active rescue' : ''}`}
+              onClick={() => setRole('RESCUE_TEAM')}
+            >
+              <ShieldAlert size={13} />
+              <span>Rescue Center</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Screen Body */}
+      <div className="phone-screen-content">
+        {activeRole === 'VICTIM' ? (
+          /* ================= VICTIM SCREENS ================= */
+          victimTab === 'HOME' ? (
+            <VictimHome
+              onNavigateToMap={() => setVictimTab('MAP')}
+              onNavigateToMessages={() => setVictimTab('MESSAGES')}
+              onNavigateToMesh={() => setVictimTab('MESH')}
+              onInspectPacket={(id) => {
+                setInspectedSosId(id);
+                setVictimTab('SOS');
+              }}
+            />
+          ) : victimTab === 'MESH' ? (
+            <MeshRadar onBack={() => setVictimTab('HOME')} />
+          ) : victimTab === 'MAP' ? (
+            <TacticalMap isRescueView={false} />
+          ) : victimTab === 'MESSAGES' ? (
+            <EmergencyChat onBack={() => setVictimTab('HOME')} />
+          ) : victimTab === 'SOS' ? (
+            <VictimHome
+              onNavigateToMap={() => setVictimTab('MAP')}
+              onNavigateToMessages={() => setVictimTab('MESSAGES')}
+              onNavigateToMesh={() => setVictimTab('MESH')}
+            />
+          ) : (
+            /* Profile & System Info */
+            <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <h2 style={{ fontSize: 20, fontWeight: 900, color: '#FFF' }}>⚙ VICTIM PROFILE</h2>
+              <div style={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-card)',
+                borderRadius: 14,
+                padding: '14px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+                fontSize: 12
+              }}>
+                <div>Name: <strong style={{ color: '#FFF' }}>{user.name}</strong></div>
+                <div>User ID: <strong style={{ color: '#FFF' }}>{user.userId}</strong></div>
+                <div>Device ID: <strong style={{ color: '#38BDF8', fontFamily: 'monospace' }}>{user.phoneId}</strong></div>
+                <div>Emergency Contact: <strong style={{ color: '#FFF' }}>{user.emergencyContact || 'None listed'}</strong></div>
+              </div>
+
+              <button
+                onClick={syncWithCloud}
+                style={{
+                  background: 'rgba(56, 189, 248, 0.15)',
+                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                  color: '#38BDF8',
+                  padding: '12px',
+                  borderRadius: 12,
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8
+                }}
+              >
+                <RefreshCw size={15} />
+                <span>{syncPending ? 'Syncing...' : 'Sync Stored Data to Cloud'}</span>
+              </button>
+
+              <button
+                onClick={logout}
+                style={{
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  color: '#EF4444',
+                  padding: '12px',
+                  borderRadius: 12,
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8
+                }}
+              >
+                <LogOut size={15} />
+                <span>Switch Account / Logout</span>
+              </button>
+            </div>
+          )
+        ) : (
+          /* ================= RESCUE TEAM SCREENS ================= */
+          rescueTab === 'DASHBOARD' ? (
+            <RescueDashboard
+              onNavigateToMap={() => setRescueTab('MAP')}
+              selectedSosIdForDetail={inspectedSosId}
+              onClearSelectedDetail={() => setInspectedSosId(null)}
+            />
+          ) : rescueTab === 'MAP' ? (
+            <TacticalMap
+              isRescueView={true}
+              onSelectSos={(id) => {
+                setInspectedSosId(id);
+                setRescueTab('DASHBOARD');
+              }}
+            />
+          ) : rescueTab === 'SOS' ? (
+            <RescueDashboard
+              onNavigateToMap={() => setRescueTab('MAP')}
+            />
+          ) : (
+            <MeshRadar />
+          )
+        )}
+      </div>
+
+      {/* Bottom Navigation Bar */}
+      <div className="phone-bottom-nav">
+        {activeRole === 'VICTIM' ? (
+          /* Victim Navigation: Home | Map | Messages | SOS | Profile */
+          <>
+            <button
+              className={`nav-item-btn ${victimTab === 'HOME' ? 'active' : ''}`}
+              onClick={() => setVictimTab('HOME')}
+            >
+              <Home size={18} />
+              <span>Home</span>
+            </button>
+
+            <button
+              className={`nav-item-btn ${victimTab === 'MESH' ? 'active' : ''}`}
+              onClick={() => setVictimTab('MESH')}
+            >
+              <Radio size={18} />
+              <span>Mesh</span>
+            </button>
+
+            <button
+              className={`nav-item-btn ${victimTab === 'SOS' ? 'active sos-glow' : 'sos-glow'}`}
+              onClick={() => setVictimTab('HOME')}
+            >
+              <AlertOctagon size={20} color="#EF4444" />
+              <span style={{ color: '#EF4444', fontWeight: 800 }}>SOS</span>
+            </button>
+
+            <button
+              className={`nav-item-btn ${victimTab === 'MAP' ? 'active' : ''}`}
+              onClick={() => setVictimTab('MAP')}
+            >
+              <Map size={18} />
+              <span>Map</span>
+            </button>
+
+            <button
+              className={`nav-item-btn ${victimTab === 'MESSAGES' ? 'active' : ''}`}
+              onClick={() => setVictimTab('MESSAGES')}
+            >
+              <MessageSquare size={18} />
+              <span>Messages</span>
+            </button>
+          </>
+        ) : (
+          /* Rescue Team Navigation: Dashboard | Live Map | SOS | Mesh | Victims */
+          <>
+            <button
+              className={`nav-item-btn ${rescueTab === 'DASHBOARD' ? 'active' : ''}`}
+              onClick={() => setRescueTab('DASHBOARD')}
+            >
+              <Home size={18} />
+              <span>Dashboard</span>
+            </button>
+
+            <button
+              className={`nav-item-btn ${rescueTab === 'MAP' ? 'active' : ''}`}
+              onClick={() => setRescueTab('MAP')}
+            >
+              <Map size={18} />
+              <span>Live Map</span>
+            </button>
+
+            <button
+              className={`nav-item-btn ${rescueTab === 'SOS' ? 'active sos-glow' : 'sos-glow'}`}
+              onClick={() => setRescueTab('DASHBOARD')}
+            >
+              <AlertOctagon size={20} color="#EF4444" />
+              <span style={{ color: '#EF4444', fontWeight: 800 }}>SOS Queue</span>
+            </button>
+
+            <button
+              className={`nav-item-btn ${rescueTab === 'MESH' ? 'active' : ''}`}
+              onClick={() => setRescueTab('MESH')}
+            >
+              <Radio size={18} />
+              <span>Mesh</span>
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Emergency Red Area SOS Alert Popup Modal */}
+      {redZoneSosPopup && (
+        <RedZoneEmergencyModal
+          packet={redZoneSosPopup}
+          onClose={() => setRedZoneSosPopup(null)}
+          onViewOnMap={() => {
+            if (activeRole === 'VICTIM') {
+              setVictimTab('MAP');
+            } else {
+              setRescueTab('MAP');
+            }
+          }}
+          onViewMesh={() => {
+            if (activeRole === 'VICTIM') {
+              setVictimTab('MESH');
+            } else {
+              setRescueTab('MESH');
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+};
