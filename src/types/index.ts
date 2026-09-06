@@ -120,3 +120,46 @@ export interface DemoStepState {
   isActive: boolean;
   autoPlay: boolean;
 }
+
+export type PacketKind = 'SOS' | 'ACK' | 'SENSOR_ALERT' | 'HEARTBEAT';
+
+export interface AckPacket {
+  kind: 'ACK';
+  ackId: string;
+  sosId: string;
+  acknowledgedBy: string;
+  acknowledgedAt: number;
+  originalSenderId: string;
+  hopCount: number;
+  ttl: number;
+  route: string[];
+  status: 'ACKNOWLEDGED' | 'RESPONDING' | 'RESCUED';
+  note?: string;
+}
+
+export interface ShelterLocation {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  capacity: string;
+  status: string;
+}
+
+export interface BlockedRoad {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  severity: 'BLOCKED' | 'HAZARDOUS' | 'CLEAR';
+  description: string;
+}
+
+export interface MeshTransport {
+  readonly name: string;
+  sendPacket(peerId: string, packetBytes: Uint8Array): Promise<boolean>;
+  broadcastPacket(packetBytes: Uint8Array): Promise<boolean>;
+  getConnectedPeers(): Promise<string[]>;
+  onPacketReceived(callback: (senderPeerId: string, packetBytes: Uint8Array) => void): () => void;
+}
+
