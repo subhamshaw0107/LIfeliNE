@@ -27,12 +27,12 @@ export class MockMeshTransport implements MeshTransport {
       return false;
     }
     // Simulate radio transmission latency
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 20));
 
     // Deliver to registered peer listener if any
     const listeners = this.peerInboxes.get(peerId);
     if (listeners && listeners.length > 0) {
-      listeners.forEach(fn => fn(packetBytes));
+      await Promise.all(listeners.map(fn => Promise.resolve(fn(packetBytes))));
     }
     return true;
   }
@@ -55,22 +55,23 @@ export class MockMeshTransport implements MeshTransport {
   /**
    * Helper to simulate a packet physically arriving from a peer.
    */
-  simulateIncomingBytes(fromPeerId: string, packetBytes: Uint8Array): void {
-    this.listeners.forEach(cb => cb(fromPeerId, packetBytes));
+  async simulateIncomingBytes(fromPeerId: string, packetBytes: Uint8Array): Promise<void> {
+    await Promise.all(this.listeners.map(cb => Promise.resolve(cb(fromPeerId, packetBytes))));
   }
 
-  registerPeerInbox(peerId: string, listener: (bytes: Uint8Array) => void): () => void {
+  registerPeerInbox(peerId: string, listener: (bytes: Uint8Array) => Promise<unknown> | void): () => void {
     let list = this.peerInboxes.get(peerId);
     if (!list) {
       list = [];
       this.peerInboxes.set(peerId, list);
     }
-    list.push(listener);
+    list.push(listener as (bytes: Uint8Array) => void);
     return () => {
       const current = this.peerInboxes.get(peerId) || [];
       this.peerInboxes.set(peerId, current.filter(fn => fn !== listener));
     };
   }
+
 }
 
 export const mockMeshTransport = new MockMeshTransport();

@@ -13,9 +13,15 @@ export class StorageEngine {
   private ackCache: Map<string, AckPacket> = new Map();
   private seenSet: Set<string> = new Set();
   private isInitialized = false;
+  private prefix: string;
 
-  constructor() {
+  constructor(prefix: string = '') {
+    this.prefix = prefix;
     this.init();
+  }
+
+  private getKey(key: string): string {
+    return this.prefix ? `${this.prefix}_${key}` : key;
   }
 
   private init(): void {
@@ -29,21 +35,21 @@ export class StorageEngine {
       if (typeof window === 'undefined' || !window.localStorage) return;
 
       // 1. Load SOS packets
-      const rawPackets = localStorage.getItem(STORAGE_KEYS.PACKETS);
+      const rawPackets = localStorage.getItem(this.getKey(STORAGE_KEYS.PACKETS));
       if (rawPackets) {
         const parsed: SosPacket[] = JSON.parse(rawPackets);
         parsed.forEach(p => this.memoryCache.set(p.id, p));
       }
 
       // 2. Load Seen IDs
-      const rawSeen = localStorage.getItem(STORAGE_KEYS.SEEN_IDS);
+      const rawSeen = localStorage.getItem(this.getKey(STORAGE_KEYS.SEEN_IDS));
       if (rawSeen) {
         const parsed: string[] = JSON.parse(rawSeen);
         parsed.forEach(id => this.seenSet.add(id));
       }
 
       // 3. Load ACKs
-      const rawAcks = localStorage.getItem(STORAGE_KEYS.ACKS);
+      const rawAcks = localStorage.getItem(this.getKey(STORAGE_KEYS.ACKS));
       if (rawAcks) {
         const parsed: AckPacket[] = JSON.parse(rawAcks);
         parsed.forEach(ack => this.ackCache.set(ack.ackId, ack));
@@ -57,7 +63,7 @@ export class StorageEngine {
     try {
       if (typeof window === 'undefined' || !window.localStorage) return;
       const arr = Array.from(this.memoryCache.values());
-      localStorage.setItem(STORAGE_KEYS.PACKETS, JSON.stringify(arr));
+      localStorage.setItem(this.getKey(STORAGE_KEYS.PACKETS), JSON.stringify(arr));
     } catch (err) {
       console.warn('[StorageEngine] Error persisting packets:', err);
     }
@@ -69,7 +75,7 @@ export class StorageEngine {
       const arr = Array.from(this.seenSet);
       // Keep up to 500 recent IDs to avoid unbounded growth
       const trimmed = arr.length > 500 ? arr.slice(arr.length - 500) : arr;
-      localStorage.setItem(STORAGE_KEYS.SEEN_IDS, JSON.stringify(trimmed));
+      localStorage.setItem(this.getKey(STORAGE_KEYS.SEEN_IDS), JSON.stringify(trimmed));
     } catch (err) {
       console.warn('[StorageEngine] Error persisting seen IDs:', err);
     }
@@ -79,11 +85,12 @@ export class StorageEngine {
     try {
       if (typeof window === 'undefined' || !window.localStorage) return;
       const arr = Array.from(this.ackCache.values());
-      localStorage.setItem(STORAGE_KEYS.ACKS, JSON.stringify(arr));
+      localStorage.setItem(this.getKey(STORAGE_KEYS.ACKS), JSON.stringify(arr));
     } catch (err) {
       console.warn('[StorageEngine] Error persisting ACKs:', err);
     }
   }
+
 
   // --- CRUD Operations for SosPackets ---
 
@@ -192,11 +199,11 @@ export class StorageEngine {
     this.seenSet.clear();
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
-        localStorage.removeItem(STORAGE_KEYS.PACKETS);
-        localStorage.removeItem(STORAGE_KEYS.SEEN_IDS);
-        localStorage.removeItem(STORAGE_KEYS.PENDING_QUEUE);
-        localStorage.removeItem(STORAGE_KEYS.ACKS);
-        localStorage.removeItem(STORAGE_KEYS.OFFLINE_SYNC);
+        localStorage.removeItem(this.getKey(STORAGE_KEYS.PACKETS));
+        localStorage.removeItem(this.getKey(STORAGE_KEYS.SEEN_IDS));
+        localStorage.removeItem(this.getKey(STORAGE_KEYS.PENDING_QUEUE));
+        localStorage.removeItem(this.getKey(STORAGE_KEYS.ACKS));
+        localStorage.removeItem(this.getKey(STORAGE_KEYS.OFFLINE_SYNC));
       }
     } catch {
       // ignore

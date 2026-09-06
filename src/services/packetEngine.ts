@@ -6,6 +6,8 @@ import {
   isSosPacket,
   validateSosPacket,
   createAckPacket,
+  createSosPacket,
+  CreateSosPacketParams,
   MeshPacket
 } from '../models/Packet';
 import { sosRepository, SosRepository } from '../repositories/sosRepository';
@@ -57,7 +59,7 @@ export class PacketEngine {
     this.localNodeId = options?.localNodeId || 'NODE-LOCAL';
     this.sosRepo = options?.sosRepo || sosRepository;
     this.dedup = options?.dedup || deduplicationService;
-    this.queue = options?.queue || storeCarryForwardQueue;
+    this.queue = options?.queue || new StoreCarryForwardQueue();
     this.triage = options?.triage || geoTriageService;
     if (options?.transport) {
       this.setTransport(options.transport);
@@ -134,6 +136,31 @@ export class PacketEngine {
       return false;
     }
     return this.processPacket(packet, senderPeerId);
+  }
+
+  /**
+   * High-level entry point to create, geo-triage, store, and return a new SOS packet.
+   */
+  createSos(params: CreateSosPacketParams): SosPacket {
+    const triageResult = this.triage.evaluateLocation(params.latitude, params.longitude, params.priority || 'HIGH');
+    const packet = createSosPacket({
+      ...params,
+      priority: triageResult.calculatedPriority,
+      riskLevel: triageResult.riskLevel,
+      disasterZoneName: triageResult.disasterZoneName,
+      distanceFromDisasterKm: triageResult.distanceFromDisasterKm,
+      distanceFromRescueKm: triageResult.distanceFromRescueKm
+    });
+    this.dedup.markSeen(packet.id);
+    this.sosRepo.savePacket(packet);
+    this.emitEvent({
+      type: 'STORE',
+      nodeId: this.localNodeId,
+      packetId: packet.id,
+      message: `SOS packet ${packet.id} created and stored locally at ${this.localNodeId}. Priority: ${packet.priority}.`,
+      timestamp: Date.now()
+    });
+    return packet;
   }
 
   /**
@@ -351,7 +378,11 @@ export class PacketEngine {
 
     // Forward to next peer
     const targetPeer = availablePeers[0];
-    const bytes = serializePacketToBytes(packet);
+    const forwardPacket: SosPacket = {
+      ...packet,
+      route: packet.route.includes(this.localNodeId) ? packet.route : [...packet.route, this.localNodeId]
+    };
+    const bytes = serializePacketToBytes(forwardPacket);
     const sent = await this.transport.sendPacket(targetPeer, bytes);
 
     if (sent) {
@@ -366,6 +397,7 @@ export class PacketEngine {
       this.queue.remove(packet.id);
       return true;
     }
+
 
     return false;
   }

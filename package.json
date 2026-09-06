@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "npx tsx tests/m3/packetEngine.test.ts"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",
