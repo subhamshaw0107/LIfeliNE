@@ -17,8 +17,10 @@ import { rateLimiter } from '../services/rateLimiter';
 import { storageService } from '../services/storageService';
 import { meshEngine, DEMO_MESH_NODES } from '../services/meshEngine';
 import { audioService } from '../services/audioService';
+import { packetEngine } from '../services/packetEngine';
 import { DEMO_STEPS } from '../services/demoRunner';
 import confetti from 'canvas-confetti';
+
 
 interface AppContextType {
   user: UserAccount | null;
@@ -465,6 +467,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Rescue Team actions
   const acknowledgeSos = (sosId: string) => {
     audioService.playAcknowledgeChime();
+    packetEngine.acknowledgeSos(sosId, 'ACKNOWLEDGED', 'Rescue Dispatch acknowledged receipt. Drone reconnaissance initiated.');
     const updated = storageService.updateSosStatus(
       sosId,
       'ACKNOWLEDGED',
@@ -481,6 +484,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const setRespondingSos = (sosId: string) => {
     audioService.playAcknowledgeChime();
+    packetEngine.acknowledgeSos(sosId, 'RESPONDING', 'Field rescue vehicle and paramedics deployed to victim coordinates.');
     const updated = storageService.updateSosStatus(
       sosId,
       'RESPONDING',
@@ -502,6 +506,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     } catch {
       // ignore
     }
+    packetEngine.acknowledgeSos(sosId, 'RESCUED', 'Victim verified safe and evacuated to designated shelter.');
     const updated = storageService.updateSosStatus(
       sosId,
       'RESCUED',
