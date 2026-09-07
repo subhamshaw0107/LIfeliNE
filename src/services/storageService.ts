@@ -1,9 +1,7 @@
 import { DeliveryStatus, SosPacket } from '../types';
+import { sosRepository } from '../repositories/sosRepository';
 
-const STORAGE_KEY_SOS_LIST = 'lifeline_stored_sos_packets';
-const STORAGE_KEY_SEEN_MESSAGES = 'lifeline_seen_msg_ids';
 const STORAGE_KEY_OFFLINE_QUEUE = 'lifeline_offline_sync_queue';
-const STORAGE_KEY_SYNC_STATE = 'lifeline_sync_state';
 
 export interface SyncState {
   isOnline: boolean;
@@ -17,31 +15,14 @@ class StorageService {
    * Get all stored SOS packets (local device store).
    */
   getStoredSosPackets(): SosPacket[] {
-    try {
-      const data = localStorage.getItem(STORAGE_KEY_SOS_LIST);
-      if (!data) return [];
-      return JSON.parse(data);
-    } catch {
-      return [];
-    }
+    return sosRepository.getAllPackets();
   }
 
   /**
    * Save an SOS packet to local storage (Store stage of Store-Carry-Forward).
    */
   saveSosPacket(packet: SosPacket): void {
-    const list = this.getStoredSosPackets();
-    const existingIndex = list.findIndex(p => p.id === packet.id);
-    if (existingIndex >= 0) {
-      list[existingIndex] = packet;
-    } else {
-      list.unshift(packet);
-    }
-    localStorage.setItem(STORAGE_KEY_SOS_LIST, JSON.stringify(list));
-
-    // Also record into seen message IDs for loop prevention
-    this.markMessageAsSeen(packet.id);
-
+    sosRepository.savePacket(packet);
     // Queue for cloud backend sync when connectivity is available
     this.queueForSync(packet.id);
   }
@@ -55,52 +36,18 @@ class StorageService {
     detail: string,
     extraFields?: Partial<SosPacket>
   ): SosPacket | null {
-    const list = this.getStoredSosPackets();
-    const packet = list.find(p => p.id === sosId);
-    if (!packet) return null;
-
-    packet.status = newStatus;
-    packet.statusHistory.push({
-      status: newStatus,
-      timestamp: Date.now(),
-      detail
-    });
-
-    if (extraFields) {
-      Object.assign(packet, extraFields);
-    }
-
-    localStorage.setItem(STORAGE_KEY_SOS_LIST, JSON.stringify(list));
-    return packet;
+    return sosRepository.updateStatus(sosId, newStatus, detail, extraFields);
   }
 
   /**
    * Check if a message ID has already been seen (duplicate protection).
    */
   isMessageSeen(messageId: string): boolean {
-    try {
-      const data = localStorage.getItem(STORAGE_KEY_SEEN_MESSAGES);
-      if (!data) return false;
-      const set: string[] = JSON.parse(data);
-      return set.includes(messageId);
-    } catch {
-      return false;
-    }
+    return sosRepository.isSeen(messageId);
   }
 
   markMessageAsSeen(messageId: string): void {
-    try {
-      const data = localStorage.getItem(STORAGE_KEY_SEEN_MESSAGES);
-      const list: string[] = data ? JSON.parse(data) : [];
-      if (!list.includes(messageId)) {
-        list.push(messageId);
-        // Keep last 200 message IDs to prevent unbounded memory
-        if (list.length > 200) list.shift();
-        localStorage.setItem(STORAGE_KEY_SEEN_MESSAGES, JSON.stringify(list));
-      }
-    } catch {
-      // ignore
-    }
+    sosRepository.markSeen(messageId);
   }
 
   /**
@@ -108,6 +55,7 @@ class StorageService {
    */
   queueForSync(packetId: string): void {
     try {
+      if (typeof window === 'undefined' || !window.localStorage) return;
       const data = localStorage.getItem(STORAGE_KEY_OFFLINE_QUEUE);
       const queue: string[] = data ? JSON.parse(data) : [];
       if (!queue.includes(packetId)) {
@@ -121,6 +69,7 @@ class StorageService {
 
   getUnsyncedCount(): number {
     try {
+      if (typeof window === 'undefined' || !window.localStorage) return 0;
       const data = localStorage.getItem(STORAGE_KEY_OFFLINE_QUEUE);
       return data ? JSON.parse(data).length : 0;
     } catch {
@@ -129,7 +78,13 @@ class StorageService {
   }
 
   clearSyncQueue(): void {
-    localStorage.removeItem(STORAGE_KEY_OFFLINE_QUEUE);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.removeItem(STORAGE_KEY_OFFLINE_QUEUE);
+      }
+    } catch {
+      // ignore
+    }
   }
 }
 
