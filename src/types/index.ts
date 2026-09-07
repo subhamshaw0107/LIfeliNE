@@ -155,11 +155,7 @@ export interface BlockedRoad {
   description: string;
 }
 
-export interface MeshTransport {
-  readonly name: string;
-  sendPacket(peerId: string, packetBytes: Uint8Array): Promise<boolean>;
-  broadcastPacket(packetBytes: Uint8Array): Promise<boolean>;
-  getConnectedPeers(): Promise<string[]>;
-  onPacketReceived(callback: (senderPeerId: string, packetBytes: Uint8Array) => void): () => void;
-}
+// Single M2 contract lives in transport/meshTransport.ts; re-exported here
+// so existing `from '../types'` imports keep working without drift.
+export type { MeshTransport, PacketReceivedCallback } from '../transport/meshTransport';
 

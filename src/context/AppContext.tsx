@@ -17,7 +17,7 @@ import { rateLimiter } from '../services/rateLimiter';
 import { storageService } from '../services/storageService';
 import { meshEngine, DEMO_MESH_NODES } from '../services/meshEngine';
 import { audioService } from '../services/audioService';
-import { packetEngine } from '../services/packetEngine';
+import { demoMeshNetwork } from '../services/demoMeshNetwork';
 import { DEMO_STEPS } from '../services/demoRunner';
 import confetti from 'canvas-confetti';
 
@@ -244,10 +244,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     refreshMeshStatus();
   }, [refreshMeshStatus]);
 
-  // Subscribe to simple mesh network status changes
+  // Subscribe to simple mesh network status changes.
+  // The status bus (meshEngine) is fed by DemoMeshNetwork from real
+  // PacketEngine events: UI -> PacketEngine -> MeshTransport.
   useEffect(() => {
     const unsub = meshEngine.onNetworkStatusChange((status) => {
       setSimpleNetworkStatus(status);
+    });
+    return () => unsub();
+  }, []);
+
+  // Subscribe to unified-mesh progress snapshots (per-hop route/hopCount,
+  // HQ delivery, reverse ACK arrival) and mirror them into UI state.
+  useEffect(() => {
+    const unsub = demoMeshNetwork.onProgress((progress) => {
+      if (!progress.packet) return;
+      const snapshot = { ...progress.packet };
+      if (progress.stage === 'DELIVERED') {
+        audioService.playEmergencyAlarm();
+      }
+      setVictimActiveSos(prev => (prev && prev.id === progress.packetId ? snapshot : prev));
+      setSosList(prev => {
+        if (!prev.some(p => p.id === progress.packetId)) return prev;
+        return prev.map(p => (p.id === progress.packetId ? snapshot : p));
+      });
     });
     return () => unsub();
   }, []);
@@ -256,6 +276,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const isNowInRange = meshEngine.toggleSimulateNodeRange(location.latitude, location.longitude);
     setMeshNodes([...meshEngine.getNodes()]);
     refreshMeshStatus();
+    // Keep M2 radio links consistent with the visualization, then let real
+    // PacketEngine Store-Carry-Forward queues resume on every node.
+    demoMeshNetwork.applyVisualizationTopology(meshEngine.getNodes());
+    void demoMeshNetwork.resumeAll();
     return isNowInRange;
   };
 
@@ -333,8 +357,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // 3. Update Rescue Center incident queue records
       setSosList(prev => prev.map(p => p.id === adaptedPacket.id ? adaptedPacket : p));
 
-      // 4. Update in-flight / queued packets in mesh engine so relays carry the updated priority
-      meshEngine.updatePacketPriority(adaptedPacket.id, updatedPriority, riskEval.riskLevel);
+      // 4. Update queued copies on every mesh node so relays carry the
+      // updated priority (same SOS id, re-sorted urgency).
+      demoMeshNetwork.updateQueuedPriority(adaptedPacket.id, updatedPriority, riskEval.riskLevel);
     }
   }, [location.latitude, location.longitude, disasterZones, victimActiveSos?.id, victimActiveSos?.priority]);
 
@@ -435,21 +460,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setRedZoneSosPopup(newPacket);
     }
 
-    // 7. Start Mesh Store-Carry-Forward routing asynchronously
-    meshEngine.routeSosPacket(
-      newPacket,
-      location.latitude,
-      location.longitude,
-      (_stepName, updatedPacket) => {
-        setVictimActiveSos({ ...updatedPacket });
-        setSosList(prev => [updatedPacket, ...prev.filter(p => p.id !== updatedPacket.id)]);
-      }
-    ).then((reachedGateway) => {
-      if (reachedGateway) {
-        // Sound dispatch alert at rescue side
-        audioService.playEmergencyAlarm();
-      }
-    });
+    // 7. Route through the unified stack: PacketEngine (M3 decisions) over
+    // MeshTransport (M2 byte movement) to B -> C -> Rescue HQ.
+    // Per-hop progress, HQ delivery and reverse ACKs arrive via the
+    // demoMeshNetwork.onProgress subscription above.
+    void demoMeshNetwork.sendSos(newPacket);
 
     return newPacket;
   };
@@ -464,10 +479,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return await sendSos(text);
   };
 
-  // Rescue Team actions
+  // Rescue Team actions.
+  // ACKs originate at the HQ gateway engine and travel back over the mesh
+  // (HQ -> C -> B -> A) through real M3 processing; the storage/UI updates
+  // below mirror the HQ record on this demo device.
   const acknowledgeSos = (sosId: string) => {
     audioService.playAcknowledgeChime();
-    packetEngine.acknowledgeSos(sosId, 'ACKNOWLEDGED', 'Rescue Dispatch acknowledged receipt. Drone reconnaissance initiated.');
+    void demoMeshNetwork.acknowledgeFromHq(sosId, 'ACKNOWLEDGED', 'Rescue Dispatch acknowledged receipt. Drone reconnaissance initiated.');
     const updated = storageService.updateSosStatus(
       sosId,
       'ACKNOWLEDGED',
@@ -484,7 +502,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const setRespondingSos = (sosId: string) => {
     audioService.playAcknowledgeChime();
-    packetEngine.acknowledgeSos(sosId, 'RESPONDING', 'Field rescue vehicle and paramedics deployed to victim coordinates.');
+    void demoMeshNetwork.acknowledgeFromHq(sosId, 'RESPONDING', 'Field rescue vehicle and paramedics deployed to victim coordinates.');
     const updated = storageService.updateSosStatus(
       sosId,
       'RESPONDING',
@@ -506,7 +524,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     } catch {
       // ignore
     }
-    packetEngine.acknowledgeSos(sosId, 'RESCUED', 'Victim verified safe and evacuated to designated shelter.');
+    void demoMeshNetwork.acknowledgeFromHq(sosId, 'RESCUED', 'Victim verified safe and evacuated to designated shelter.');
     const updated = storageService.updateSosStatus(
       sosId,
       'RESCUED',

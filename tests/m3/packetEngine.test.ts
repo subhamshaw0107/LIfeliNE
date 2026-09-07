@@ -164,66 +164,138 @@ async function runTestSuite() {
   assert(mapData.sosLocations.some(p => p.packetId === sos.id), 'Active SOS returned as map pin');
 
   // =========================================================================
-  // MULTI-HOP STORE-CARRY-FORWARD DEMO SCENARIO: PHONE A -> PHONE B -> RESCUE
+  // TRANSPORT UNIT TESTS: M2 byte movement only (no M3 logic in transport)
+  // Delivery happens exclusively via sendPacket()/broadcastPacket().
+  // No simulateIncomingBytes(), no direct repo edits, no status hardcoding.
   // =========================================================================
   console.log('\n==================================================');
-  console.log('TESTING COMPLETE STORE-CARRY-FORWARD FLOW (A -> B -> RESCUE)');
+  console.log('TRANSPORT UNIT TESTS (M2 delivery via sendPacket)');
   console.log('==================================================\n');
 
-  // Setup simulated devices
-  const transportAB = new MockMeshTransport();
-  const transportBRescue = new MockMeshTransport();
-  // Phone B is initially disconnected from Rescue HQ (Carrying while moving)
-  transportBRescue.setConnectedPeers([]);
+  MockMeshTransport.resetNetwork();
 
-  // Phone A: Victim
-  const storageA = new StorageEngine('phone_a');
-  storageA.clearAll();
-  const repoA = new SosRepository(storageA);
-  const phoneA = new PacketEngine({
-    localNodeId: 'PHONE-A',
-    sosRepo: repoA,
-    dedup: new DeduplicationService(100, storageA),
-    transport: transportAB
+  // --- Setup: two nodes on the shared virtual medium ---
+  const tNode1 = new MockMeshTransport('T-NODE-1', ['T-NODE-2']);
+  const tNode2 = new MockMeshTransport('T-NODE-2', ['T-NODE-1']);
+
+  // 1. Transport node registration + peer connection
+  console.log('[Transport 1] Node registration & peer connection');
+  assert((await tNode1.getConnectedPeers()).includes('T-NODE-2'), 'T-NODE-1 lists T-NODE-2 as connected peer');
+  assert((await tNode2.getConnectedPeers()).includes('T-NODE-1'), 'T-NODE-2 lists T-NODE-1 as connected peer');
+
+  // 2. sendPacket() delivery + receiver callback invocation
+  console.log('\n[Transport 2] sendPacket delivery & callback invocation');
+  let receivedAt2: { from: string; bytes: Uint8Array }[] = [];
+  tNode2.onPacketReceived((from, bytes) => {
+    receivedAt2.push({ from, bytes });
   });
+  const rawBytes = new TextEncoder().encode('{"hello":"mesh"}');
+  const sent12 = await tNode1.sendPacket('T-NODE-2', rawBytes);
+  assert(sent12 === true, 'sendPacket to connected peer returns true');
+  assert(receivedAt2.length === 1, 'Destination callback fired exactly once (no duplicate delivery)');
+  assert(receivedAt2[0].from === 'T-NODE-1', 'Callback reports correct sender node id');
+  assert(new TextDecoder().decode(receivedAt2[0].bytes) === '{"hello":"mesh"}', 'Bytes arrive intact');
 
-  // Phone B: Relay Node
-  const storageB = new StorageEngine('phone_b');
-  storageB.clearAll();
-  const repoB = new SosRepository(storageB);
-  const phoneB = new PacketEngine({
-    localNodeId: 'PHONE-B',
-    sosRepo: repoB,
-    dedup: new DeduplicationService(100, storageB),
-    transport: transportBRescue
+  // 3. A -> B delivery of a real serialized SOS through the transport
+  console.log('\n[Transport 3] Serialized SOS bytes travel A -> B via transport');
+  const sosForWire = createSosPacket({ senderId: 'PERSON-A', deviceId: 'DEV-A', latitude: 22.9785, longitude: 88.4395 });
+  const sosWireBytes = serializePacketToBytes(sosForWire);
+  receivedAt2 = [];
+  await tNode1.sendPacket('T-NODE-2', sosWireBytes);
+  assert(receivedAt2.length === 1, 'SOS bytes delivered to peer callback');
+  const decodedOnWire = deserializePacketFromBytes(receivedAt2[0].bytes);
+  assert(decodedOnWire !== null && decodedOnWire.id === sosForWire.id, 'Peer can deserialize the SOS id');
+
+  // 4. Multiple peers: broadcast reaches every connected peer exactly once
+  console.log('\n[Transport 4] Multiple peers & broadcast delivery');
+  const tNode3 = new MockMeshTransport('T-NODE-3', ['T-NODE-1']);
+  let receivedAt3 = 0;
+  tNode3.onPacketReceived(() => {
+    receivedAt3++;
   });
+  tNode1.addPeer('T-NODE-3');
+  const bc = await tNode1.broadcastPacket(rawBytes);
+  assert(bc === true, 'broadcastPacket returns true when at least one peer reached');
+  assert(receivedAt2.length === 2, 'Broadcast reached T-NODE-2 exactly once more');
+  assert(receivedAt3 === 1, 'Broadcast reached T-NODE-3 exactly once');
 
-  // Rescue Command Center Gateway
-  const storageRescue = new StorageEngine('rescue_hq');
-  storageRescue.clearAll();
-  const repoRescue = new SosRepository(storageRescue);
-  const rescueHQ = new PacketEngine({
-    localNodeId: 'NODE-RESCUE-CMD',
-    sosRepo: repoRescue,
-    dedup: new DeduplicationService(100, storageRescue)
-  });
+  // 5. Disconnected peer handling: no crash, clean false, no delivery
+  console.log('\n[Transport 5] Disconnected peer handling');
+  tNode1.removePeer('T-NODE-3');
+  const countBefore = receivedAt3;
+  const sentDisc = await tNode1.sendPacket('T-NODE-3', rawBytes);
+  assert(sentDisc === false, 'sendPacket to disconnected peer returns false');
+  assert(receivedAt3 === countBefore, 'Disconnected peer receives nothing');
 
-  // Wire transports:
-  // When Phone A sends to PHONE-B, deliver to Phone B
-  transportAB.registerPeerInbox('PHONE-B', async bytes => {
-    await phoneB.processIncomingBytes('PHONE-A', bytes);
-  });
+  // 6. Unknown peer handling: no crash, clean false
+  console.log('\n[Transport 6] Unknown peer handling');
+  tNode1.addPeer('T-NODE-GHOST');
+  const sentGhost = await tNode1.sendPacket('T-NODE-GHOST', rawBytes);
+  assert(sentGhost === false, 'sendPacket to unknown (unregistered) peer returns false');
+  tNode1.removePeer('T-NODE-GHOST');
 
-  // When Phone B sends to NODE-RESCUE-CMD, deliver to Rescue HQ
-  transportBRescue.registerPeerInbox('NODE-RESCUE-CMD', async bytes => {
-    await rescueHQ.processIncomingBytes('PHONE-B', bytes);
-  });
+  // 7. Broadcast with no reachable peers returns false (does not fake success)
+  console.log('\n[Transport 7] Broadcast with empty peer list');
+  const tLonely = new MockMeshTransport('T-NODE-LONELY', []);
+  assert((await tLonely.broadcastPacket(rawBytes)) === false, 'Broadcast with no peers returns false');
 
+  // 8. Malformed bytes pass through M2 untouched (M3 decides to drop them)
+  console.log('\n[Transport 8] Malformed bytes are transported, not interpreted');
+  receivedAt2 = [];
+  const garbage = new Uint8Array([0xff, 0x00, 0x7b, 0x42]);
+  const sentGarbage = await tNode1.sendPacket('T-NODE-2', garbage);
+  assert(sentGarbage === true, 'Transport delivers opaque bytes without crashing');
+  assert(receivedAt2.length === 1, 'Malformed bytes still arrive at destination callback');
+  assert(deserializePacketFromBytes(receivedAt2[0].bytes) === null, 'M3 deserializer rejects the garbage (transport did not decide)');
 
+  // 9. Missing receive listener: delivery to a live node without listeners still succeeds
+  console.log('\n[Transport 9] Missing receive listener does not crash');
+  const tSilent = new MockMeshTransport('T-NODE-SILENT', []);
+  tNode1.addPeer('T-NODE-SILENT');
+  assert((await tNode1.sendPacket('T-NODE-SILENT', rawBytes)) === true, 'Send to listener-less node returns true without crashing');
+  tNode1.removePeer('T-NODE-SILENT');
 
-  // Step 1: Victim creates SOS on Phone A
+  for (const t of [tNode1, tNode2, tNode3, tLonely, tSilent]) t.dispose();
+  MockMeshTransport.resetNetwork();
+
+  // =========================================================================
+  // MULTI-HOP STORE-CARRY-FORWARD E2E: A -> B -> C -> RESCUE, ACK returns.
+  // Bytes travel ONLY through MeshTransport.sendPacket() inside
+  // PacketEngine.attemptForwarding()/attemptForwardingAck()/resumePendingRelays().
+  // No registerPeerInbox, no simulateIncomingBytes, no direct storage writes.
+  // =========================================================================
+  console.log('\n==================================================');
+  console.log('TESTING COMPLETE STORE-CARRY-FORWARD FLOW (A -> B -> C -> RESCUE -> ACK)');
+  console.log('==================================================\n');
+
+  // Clean virtual medium: each device owns one transport, wired as a chain.
+  const transportA = new MockMeshTransport('PHONE-A', ['PHONE-B']);
+  const transportB = new MockMeshTransport('PHONE-B', ['PHONE-A', 'PHONE-C']);
+  const transportC = new MockMeshTransport('PHONE-C', ['PHONE-B', 'NODE-RESCUE-CMD']);
+  const transportHQ = new MockMeshTransport('NODE-RESCUE-CMD', ['PHONE-C']);
+
+  const makeNode = (nodeId: string, prefix: string, transport: MockMeshTransport) => {
+    const storage = new StorageEngine(prefix);
+    storage.clearAll();
+    const repo = new SosRepository(storage);
+    const engine = new PacketEngine({
+      localNodeId: nodeId,
+      sosRepo: repo,
+      dedup: new DeduplicationService(100, storage),
+      transport
+    });
+    return { storage, repo, engine };
+  };
+
+  // Phone A: Victim. Phone B/C: relays. Rescue HQ: destination.
+  const nodeA = makeNode('PHONE-A', 'e2e_phone_a', transportA);
+  const nodeB = makeNode('PHONE-B', 'e2e_phone_b', transportB);
+  const nodeC = makeNode('PHONE-C', 'e2e_phone_c', transportC);
+  const nodeHQ = makeNode('NODE-RESCUE-CMD', 'e2e_rescue_hq', transportHQ);
+
+  // Step 1: Victim creates SOS on Phone A (Red Zone -> CRITICAL via M3 triage)
   console.log('Step 1: Victim on Phone A creates Red Zone SOS...');
-  const redSos = phoneA.createSos({
+  const redSos = nodeA.engine.createSos({
     senderId: 'PERSON-A',
     deviceId: 'DEV-A',
     latitude: 22.9785, // Inside Flood Zone A
@@ -231,40 +303,64 @@ async function runTestSuite() {
     message: 'Trapped on rooftop due to flood!'
   });
   assert(redSos.priority === 'CRITICAL', 'Phone A: SOS created with CRITICAL priority (Red Zone)');
-  assert(repoA.hasPacket(redSos.id), 'Phone A: SOS saved in local storage');
+  assert(nodeA.repo.hasPacket(redSos.id), 'Phone A: SOS saved in local storage');
 
-  // Step 2: Phone A transmits to Phone B via transport
-  console.log('Step 2: Phone A forwards packet to Phone B...');
-  transportAB.setConnectedPeers(['PHONE-B']);
-  await phoneA.attemptForwarding(redSos);
+  // Step 2: Phone A -> Phone B hop, entirely through M2 sendPacket
+  console.log('Step 2: Phone A forwards packet to Phone B via MeshTransport...');
+  await nodeA.engine.attemptForwarding(redSos);
 
-  // Step 3: Phone B receives, deduplicates, stores, and queues for Rescue
-  console.log('Step 3: Phone B receives packet...');
-  assert(repoB.hasPacket(redSos.id), 'Phone B: SOS successfully received and stored locally');
-  const packetAtB = repoB.getPacket(redSos.id);
+  // Step 3: Phone B received via its transport callback -> M3 dedup/store/SCF
+  console.log('Step 3: Phone B receives packet via transport...');
+  assert(nodeB.repo.hasPacket(redSos.id), 'Phone B: SOS successfully received and stored locally');
+  const packetAtB = nodeB.repo.getPacket(redSos.id);
   assert(packetAtB !== null && packetAtB.route.includes('PHONE-A'), 'Phone B: Route trace contains PHONE-A');
 
-  // Step 4: Phone B encounters Rescue HQ and forwards
-  console.log('Step 4: Phone B encounters Rescue HQ and forwards packet...');
-  transportBRescue.setConnectedPeers(['NODE-RESCUE-CMD']);
-  await phoneB.resumePendingRelays();
+  // Step 4: Phone B -> Phone C hop through M2 sendPacket
+  console.log('Step 4: Phone B relays packet to Phone C via MeshTransport...');
+  await nodeB.engine.resumePendingRelays();
+  assert(nodeC.repo.hasPacket(redSos.id), 'Phone C: SOS received and stored via transport relay');
+  const packetAtC = nodeC.repo.getPacket(redSos.id);
+  assert(packetAtC !== null && packetAtC.route.includes('PHONE-B'), 'Phone C: Route trace contains PHONE-B');
 
-  // Step 5: Rescue HQ receives and verifies delivery
-  console.log('Step 5: Rescue HQ processes delivered packet...');
-  const packetAtRescue = repoRescue.getPacket(redSos.id);
+  // Step 5: Phone C -> Rescue HQ hop through M2 sendPacket
+  console.log('Step 5: Phone C relays packet to Rescue HQ via MeshTransport...');
+  await nodeC.engine.resumePendingRelays();
+
+  // Step 6: Rescue HQ delivery verified (M3 DELIVERED state)
+  console.log('Step 6: Rescue HQ processes delivered packet...');
+  const packetAtRescue = nodeHQ.repo.getPacket(redSos.id);
   assert(packetAtRescue !== null, 'Rescue HQ: Packet arrived at Tactical HQ');
   assert(packetAtRescue?.status === 'DELIVERED', 'Rescue HQ: Packet marked as DELIVERED');
 
-
-  // Step 6: Rescue HQ dispatches ACK back
-  console.log('Step 6: Rescue HQ acknowledges SOS and creates ACK receipt...');
-  const rescueAck = rescueHQ.acknowledgeSos(redSos.id, 'ACKNOWLEDGED', 'Rescue boat 04 dispatched to coordinates');
+  // Step 7: Rescue HQ ACK propagates back C -> B -> A through M2 sendPacket.
+  // acknowledgeSos() relays over the transport; each hop awaits the next, so
+  // one awaited call drives the whole reverse chain via PacketEngine only.
+  console.log('Step 7: Rescue HQ acknowledges SOS; ACK routes back via MeshTransport...');
+  const rescueAck = await nodeHQ.engine.acknowledgeSos(redSos.id, 'ACKNOWLEDGED', 'Rescue boat 04 dispatched to coordinates');
   assert(rescueAck !== null && rescueAck.kind === 'ACK', 'Rescue HQ: ACK packet generated');
-  assert(repoRescue.getPacket(redSos.id)?.status === 'ACKNOWLEDGED', 'Rescue HQ: Ticket state updated to ACKNOWLEDGED');
+  assert(nodeHQ.repo.getPacket(redSos.id)?.status === 'ACKNOWLEDGED', 'Rescue HQ: Ticket state updated to ACKNOWLEDGED');
+
+  // Drain any held reverse-leg ACKs (no-ops if the chain already completed).
+  await nodeC.engine.resumePendingRelays();
+  await nodeB.engine.resumePendingRelays();
+
+  assert(nodeC.repo.getPacket(redSos.id)?.status === 'ACKNOWLEDGED', 'Phone C (Relay): Stored SOS updated to ACKNOWLEDGED');
+  assert(nodeB.repo.getPacket(redSos.id)?.status === 'ACKNOWLEDGED', 'Phone B (Relay): Stored SOS updated to ACKNOWLEDGED');
+
+  // Step 8: Phone A (Victim) receives ACK and updates status — proof of full round-trip
+  console.log('Step 8: Victim on Phone A receives routed ACK receipt...');
+  const victimSos = nodeA.repo.getPacket(redSos.id);
+  assert(victimSos !== null && victimSos.status === 'ACKNOWLEDGED', 'Phone A (Victim): Status successfully updated to ACKNOWLEDGED via reverse mesh route');
+  const victimAcks = nodeA.repo.getAcksForSos(redSos.id);
+  assert(victimAcks.length > 0 && victimAcks[0].ackId === rescueAck.ackId, 'Phone A (Victim): Confirmed authentic ACK record stored');
+
+  for (const t of [transportA, transportB, transportC, transportHQ]) t.dispose();
+  MockMeshTransport.resetNetwork();
 
   console.log('\n==================================================');
-  console.log('ALL 15 TESTS & STORE-CARRY-FORWARD DEMO PASSED! 🎉');
+  console.log('ALL 15 TESTS, TRANSPORT UNIT TESTS & ROUND-TRIP DEMO PASSED!');
   console.log('==================================================\n');
+
 }
 
 runTestSuite().catch(err => {

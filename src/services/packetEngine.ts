@@ -1,4 +1,4 @@
-import { SosPacket, AckPacket, SimpleNetworkStatus, DeliveryStatus, EmergencyPriority } from '../types';
+import { SosPacket, AckPacket, SimpleNetworkStatus, DeliveryStatus, EmergencyPriority, RiskLevel } from '../types';
 import {
   deserializePacketFromBytes,
   serializePacketToBytes,
@@ -47,6 +47,7 @@ export class PacketEngine {
   private onAckReceivedListeners: ((ack: AckPacket) => void)[] = [];
   private onStatusChangeListeners: ((status: SimpleNetworkStatus) => void)[] = [];
   private currentNetworkStatus: SimpleNetworkStatus = 'CONNECTED';
+  private pendingAcks: AckPacket[] = [];
 
   constructor(options?: {
     localNodeId?: string;
@@ -76,9 +77,12 @@ export class PacketEngine {
 
   setTransport(transport: MeshTransport): void {
     this.transport = transport;
-    this.transport.onPacketReceived((senderPeerId, packetBytes) => {
-      this.processIncomingBytes(senderPeerId, packetBytes);
-    });
+    // Return the processing promise so a transport (e.g. MockMeshTransport)
+    // can await end-to-end delivery into this engine. The declared callback
+    // type returns void, so the promise is awaitable yet safely ignorable.
+    this.transport.onPacketReceived((senderPeerId, packetBytes) =>
+      this.processIncomingBytes(senderPeerId, packetBytes) as unknown as void
+    );
   }
 
   getTransport(): MeshTransport | null {
@@ -321,27 +325,68 @@ export class PacketEngine {
 
     this.onAckReceivedListeners.forEach(cb => cb(ack));
 
-    // Check if this node is the original victim device
-    if (this.localNodeId === ack.originalSenderId || this.localNodeId === 'PERSON-A') {
-      this.sosRepo.updateStatus(ack.sosId, ack.status, `Direct ACK confirmation received on victim phone`);
+    // Check if this node is the original victim device.
+    // Three ways to detect originator:
+    //  1. localNodeId matches ack.originalSenderId (direct node-ID match)
+    //  2. localSos exists and senderId/deviceId matches localNodeId (uncommon but possible when node=person)
+    //  3. localSos exists with an empty route — the SOS was created at this node (route starts empty
+    //     and only gets populated as it hops; relay nodes receive packets with route.length >= 1)
+    const localSos = this.sosRepo.getPacket(ack.sosId);
+    const isOriginalVictim =
+      this.localNodeId === ack.originalSenderId ||
+      (localSos !== null && (localSos.senderId === this.localNodeId || localSos.deviceId === this.localNodeId)) ||
+      (localSos !== null && localSos.route.length === 0);
+
+    if (isOriginalVictim) {
+      this.sosRepo.updateStatus(
+        ack.sosId,
+        ack.status,
+        `Direct ACK confirmation received on victim phone from ${ack.acknowledgedBy}`
+      );
       return true;
     }
 
-    // Otherwise relay ACK back towards sender
+    // Otherwise relay ACK back towards sender (Store-Carry-Forward for ACKs)
     if (ack.ttl > 0 && ack.hopCount < 10) {
       const relayedAck: AckPacket = {
         ...ack,
         hopCount: ack.hopCount + 1,
         ttl: ack.ttl - 1,
-        route: [...ack.route, this.localNodeId]
+        route: ack.route.includes(this.localNodeId) ? ack.route : [...ack.route, this.localNodeId]
       };
-      if (this.transport) {
-        const bytes = serializePacketToBytes(relayedAck);
-        await this.transport.broadcastPacket(bytes);
+      const sent = await this.attemptForwardingAck(relayedAck);
+      if (!sent) {
+        // Peer not currently in range: hold in pending ACKs queue for store-and-forward
+        if (!this.pendingAcks.some(a => a.ackId === relayedAck.ackId)) {
+          this.pendingAcks.push(relayedAck);
+        }
       }
     }
 
     return true;
+  }
+
+  /**
+   * Attempt to send an ACK packet to available peers.
+   */
+  async attemptForwardingAck(ack: AckPacket): Promise<boolean> {
+    if (!this.transport) return false;
+    const peers = await this.transport.getConnectedPeers();
+    // Exclude nodes already in route to prevent loops
+    const availablePeers = peers.filter(peerId => !ack.route.includes(peerId));
+    if (availablePeers.length === 0) return false;
+
+    const bytes = serializePacketToBytes(ack);
+    let anySent = false;
+    for (const peer of availablePeers) {
+      const ok = await this.transport.sendPacket(peer, bytes);
+      if (ok) anySent = true;
+    }
+    if (anySent) {
+      this.pendingAcks = this.pendingAcks.filter(a => a.ackId !== ack.ackId);
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -398,12 +443,24 @@ export class PacketEngine {
       return true;
     }
 
-
     return false;
   }
 
   /**
-   * Trigger delivery of all pending packets when new peers connect (Store-Carry-Forward resume).
+   * Dynamically update the priority of a packet held in this engine's
+   * Store-Carry-Forward queue (e.g. victim walked into a Red Zone).
+   * Same SOS id, re-sorted urgency, next relay carries the new priority.
+   */
+  updateQueuedPriority(
+    packetId: string,
+    newPriority: EmergencyPriority,
+    newRiskLevel?: RiskLevel
+  ): boolean {
+    return this.queue.updatePriority(packetId, newPriority, newRiskLevel);
+  }
+
+  /**
+   * Trigger delivery of all pending packets (both SOS and ACKs) when new peers connect (Store-Carry-Forward resume).
    */
   async resumePendingRelays(): Promise<number> {
     const pending = this.queue.getAll();
@@ -412,20 +469,51 @@ export class PacketEngine {
       const success = await this.attemptForwarding(packet);
       if (success) sentCount++;
     }
+
+    // Also forward any pending reverse ACKs stored while moving!
+    const pendingAcksCopy = [...this.pendingAcks];
+    for (const ack of pendingAcksCopy) {
+      const success = await this.attemptForwardingAck(ack);
+      if (success) sentCount++;
+    }
+
     return sentCount;
   }
 
   /**
-   * Generate an explicit ACK packet from this node (used by Rescue Center).
+   * Generate an explicit ACK packet from this node (used by Rescue Center) and propagate backward.
    */
-  acknowledgeSos(sosId: string, status: 'ACKNOWLEDGED' | 'RESPONDING' | 'RESCUED' = 'ACKNOWLEDGED', note?: string): AckPacket | null {
+  async acknowledgeSos(
+    sosId: string,
+    status: 'ACKNOWLEDGED' | 'RESPONDING' | 'RESCUED' = 'ACKNOWLEDGED',
+    note?: string
+  ): Promise<AckPacket | null> {
     const sos = this.sosRepo.getPacket(sosId);
     if (!sos) return null;
 
     const ack = createAckPacket(sos, this.localNodeId, status, note);
-    this.processAckPacket(ack);
+    this.dedup.markSeen(ack.ackId);
+    this.sosRepo.saveAck(ack);
+
+    this.emitEvent({
+      type: 'ACK_RECEIVED',
+      nodeId: this.localNodeId,
+      packetId: ack.ackId,
+      message: `[ACK GENERATED] SOS ${ack.sosId} set to ${ack.status} by ${this.localNodeId}`,
+      timestamp: Date.now()
+    });
+
+    this.onAckReceivedListeners.forEach(cb => cb(ack));
+
+    // Relay ACK outward over transport towards victim
+    const sent = await this.attemptForwardingAck(ack);
+    if (!sent) {
+      this.pendingAcks.push(ack);
+    }
+
     return ack;
   }
+
 }
 
 export const packetEngine = new PacketEngine();
