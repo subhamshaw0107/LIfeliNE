@@ -132,6 +132,8 @@ export class BleMeshTransport implements MeshTransport {
         return false;
       }
       this.started = true;
+      // DIAG-LOG: temporary physical-test aid (remove after field verification).
+      console.log(`[BLE-DIAG] radio started, nodeId=${this.nodeId}`);
       return true;
     } catch {
       return false;
@@ -248,6 +250,8 @@ export class BleMeshTransport implements MeshTransport {
     }
     if (bytes.length === 0) return;
     const sender = payload.peerId;
+    // DIAG-LOG: temporary physical-test aid (remove after field verification).
+    console.log(`[BLE-DIAG] packet from ${sender}, ${bytes.length} bytes -> M3`);
     const snapshot = [...this.listeners];
     for (const listener of snapshot) {
       try {

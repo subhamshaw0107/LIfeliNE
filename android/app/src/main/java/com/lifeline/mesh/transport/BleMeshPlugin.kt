@@ -107,8 +107,12 @@ class BleMeshPlugin : Plugin() {
         call.resolve(result)
     }
 
+    // Overrides Plugin.requestPermissions(PluginCall): Capacitor's default
+    // uses the annotation-declared permission set, but LIFELINE needs a
+    // version-aware set (API 31+ BLE vs legacy BT+location), so the manual
+    // ActivityCompat flow below replaces it (same bridge name/signature).
     @PluginMethod
-    fun requestPermissions(call: PluginCall) {
+    override fun requestPermissions(call: PluginCall) {
         val missing = BlePermissions.missing(context)
         if (missing.isEmpty()) {
             val result = JSObject()
@@ -145,6 +149,8 @@ class BleMeshPlugin : Plugin() {
         val granted = BlePermissions.hasAll(context)
         val result = JSObject()
         result.put("granted", granted)
+        // DIAG-LOG: temporary physical-test aid (remove after field verification).
+        Log.i(TAG, "DIAG permissions granted=$granted")
         saved.resolve(result)
         bridge.releaseCall(saved)
     }
@@ -158,8 +164,11 @@ class BleMeshPlugin : Plugin() {
             return
         }
         BleMeshService.start(context)
+        val started = mgr.startScan()
         val result = JSObject()
-        result.put("started", mgr.startScan())
+        result.put("started", started)
+        // DIAG-LOG: temporary physical-test aid (remove after field verification).
+        Log.i(TAG, "DIAG scan started=$started")
         call.resolve(result)
     }
 
@@ -179,8 +188,11 @@ class BleMeshPlugin : Plugin() {
             return
         }
         BleMeshService.start(context)
+        val started = mgr.startAdvertising()
         val result = JSObject()
-        result.put("started", mgr.startAdvertising())
+        result.put("started", started)
+        // DIAG-LOG: temporary physical-test aid (remove after field verification).
+        Log.i(TAG, "DIAG advertising started=$started")
         call.resolve(result)
     }
 

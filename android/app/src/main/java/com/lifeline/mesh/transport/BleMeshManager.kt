@@ -286,6 +286,8 @@ class BleMeshManager(
         } catch (e: Exception) {
             return false
         }
+        // DIAG-LOG: temporary physical-test aid (remove after field verification).
+        Log.i(TAG, "DIAG send queued: ${frames.size} frames to $stableId (mtu=${link.mtu})")
         // Prefer central-side RX writes; fall back to server-side TX notify.
         if (link.clientGatt != null && link.remoteRx != null) {
             link.writeQueue.addAll(frames)
@@ -518,6 +520,8 @@ class BleMeshManager(
         link.reassembler.pruneIfStale(System.currentTimeMillis())
         val complete = link.reassembler.feed(raw) ?: return
         val sender = link.stableId ?: address
+        // DIAG-LOG: temporary physical-test aid (remove after field verification).
+        Log.i(TAG, "DIAG packet reassembled: ${complete.size} bytes from $sender")
         listener.onPacket(sender, complete)
     }
 
@@ -652,6 +656,8 @@ class BleMeshManager(
         val link = links[address] ?: return
         link.reassembler.pruneIfStale(System.currentTimeMillis())
         val complete = link.reassembler.feed(frame) ?: return
+        // DIAG-LOG: temporary physical-test aid (remove after field verification).
+        Log.i(TAG, "DIAG packet reassembled: ${complete.size} bytes from ${link.stableId ?: address}")
         listener.onPacket(link.stableId ?: address, complete)
     }
 
@@ -669,6 +675,8 @@ class BleMeshManager(
             link.identified = true
             addressByStableId[stableId] = link.address
         }
+        // DIAG-LOG: temporary physical-test aid (remove after field verification).
+        Log.i(TAG, "DIAG peer identified: $stableId (addr=${link.address})")
         listener.onPeerConnected(stableId)
     }
 
