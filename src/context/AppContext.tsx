@@ -384,7 +384,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     // 2. Capture parameters
     const sosId = cryptoService.generateSosId();
-    const deviceId = user?.phoneId || cryptoService.getOrCreateDeviceId();
+    const deviceId = await cryptoService.getDeviceId();
     const now = Date.now();
     const dateObj = new Date(now);
     const timeFormatted = dateObj.toTimeString().split(' ')[0];
@@ -485,19 +485,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // below mirror the HQ record on this demo device.
   const acknowledgeSos = (sosId: string) => {
     audioService.playAcknowledgeChime();
-    void demoMeshNetwork.acknowledgeFromHq(sosId, 'ACKNOWLEDGED', 'Rescue Dispatch acknowledged receipt. Drone reconnaissance initiated.');
-    const updated = storageService.updateSosStatus(
-      sosId,
-      'ACKNOWLEDGED',
-      'Rescue Dispatch acknowledged receipt. Drone reconnaissance initiated.',
-      { acknowledgedAt: Date.now() }
-    );
-    if (updated) {
-      setSosList(prev => prev.map(p => p.id === sosId ? { ...p, status: 'ACKNOWLEDGED', acknowledgedAt: Date.now() } : p));
-      if (victimActiveSos?.id === sosId) {
-        setVictimActiveSos(prev => prev ? { ...prev, status: 'ACKNOWLEDGED', acknowledgedAt: Date.now() } : null);
+    void (async () => {
+      const ack = await demoMeshNetwork.acknowledgeFromHq(sosId, 'ACKNOWLEDGED', 'Rescue Dispatch acknowledged receipt. Drone reconnaissance initiated.');
+      if (!ack) return;
+      const updated = storageService.updateSosStatus(
+        sosId,
+        'ACKNOWLEDGED',
+        'Rescue Dispatch acknowledged receipt. Drone reconnaissance initiated.',
+        { acknowledgedAt: Date.now() }
+      );
+      if (updated) {
+        setSosList(prev => prev.map(p => p.id === sosId ? { ...p, status: 'ACKNOWLEDGED', acknowledgedAt: Date.now() } : p));
+        if (victimActiveSos?.id === sosId) {
+          setVictimActiveSos(prev => prev ? { ...prev, status: 'ACKNOWLEDGED', acknowledgedAt: Date.now() } : null);
+        }
       }
-    }
+    })();
   };
 
   const setRespondingSos = (sosId: string) => {

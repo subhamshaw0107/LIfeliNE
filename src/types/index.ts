@@ -57,6 +57,7 @@ export interface SosPacket {
   iv: string;
   batteryLevel: number;
   createdAt: number;
+  recipientId?: string;
   expiresAt?: number;
   forwardingState?: 'PENDING' | 'FORWARDING' | 'FORWARDED' | 'DELIVERED' | 'EXPIRED';
   acknowledgedAt?: number;
@@ -135,6 +136,14 @@ export interface AckPacket {
   route: string[];
   status: 'ACKNOWLEDGED' | 'RESPONDING' | 'RESCUED';
   note?: string;
+  /** Present only on M4 authenticated ACKs (ciphertext; not a key). */
+  encryptedPayload?: string;
+  iv?: string;
+  algorithm?: string;
+  senderId?: string;
+  recipientId?: string;
+  deviceId?: string;
+  createdAt?: number;
 }
 
 export interface ShelterLocation {
