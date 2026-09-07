@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">LIFELINE</string>
+    <string name="title_activity_main">LIFELINE</string>
+    <string name="package_name">com.lifeline.mesh</string>
+    <string name="custom_url_scheme">com.lifeline.mesh</string>
+</resources>

@@ -7,7 +7,14 @@ import {
   SimpleNetworkStatus,
 } from '../types';
 import { PacketEngine, packetEngine } from './packetEngine';
+import type { MeshTransport } from '../transport/meshTransport';
 import { MockMeshTransport } from '../transport/mockMeshTransport';
+import { BleMeshTransport } from '../transport/bleMeshTransport';
+import {
+  createSelfTransport,
+  upgradeToBleIfAvailable,
+  type BleEnvironment,
+} from './bleTransportFactory';
 import { StorageEngine } from '../storage/storageEngine';
 import { SosRepository, sosRepository } from '../repositories/sosRepository';
 import { DeduplicationService } from './deduplicationService';
@@ -68,8 +75,12 @@ const STAGE_STATUS: Record<DemoMeshStage, SimpleNetworkStatus | null> = {
 };
 
 class DemoMeshNetwork {
-  /** This device's radio link (M2). */
-  readonly selfTransport: MockMeshTransport;
+  /**
+   * This device's radio link (M2). Starts as mock so browser/demo/tests
+   * work everywhere; upgraded to real BLE on capable Android devices
+   * (see enableNativeBle). Virtual relay peers always stay mocked.
+   */
+  selfTransport: MeshTransport;
   private readonly relayBTransport: MockMeshTransport;
   private readonly relayCTransport: MockMeshTransport;
   private readonly hqTransport: MockMeshTransport;
@@ -88,7 +99,7 @@ class DemoMeshNetwork {
 
   constructor() {
     // This device owns one transport; virtual peers own theirs.
-    this.selfTransport = new MockMeshTransport(DEMO_SELF_NODE_ID);
+    this.selfTransport = createSelfTransport(DEMO_SELF_NODE_ID);
     this.relayBTransport = new MockMeshTransport(DEMO_RELAY_B_NODE_ID);
     this.relayCTransport = new MockMeshTransport(DEMO_RELAY_C_NODE_ID);
     this.hqTransport = new MockMeshTransport(DEMO_HQ_NODE_ID);
@@ -98,6 +109,9 @@ class DemoMeshNetwork {
     // ACKs and status updates are visible to the Rescue dashboard.
     this.selfEngine.setLocalNodeId(DEMO_SELF_NODE_ID);
     this.selfEngine.setTransport(this.selfTransport);
+    // Opportunistic radio upgrade: real BLE on capable Android, mock
+    // everywhere else (no-op there). Virtual peers are untouched.
+    void this.enableNativeBle();
 
     // Virtual peers are stand-ins for other people's phones: isolated stores
     // cleared on boot so demo relays never leak state between sessions.
@@ -193,6 +207,28 @@ class DemoMeshNetwork {
   }
 
   /**
+   * Swap this device's radio link to real BLE when the host supports it
+   * (native Android + BleMesh plugin + granted permissions). Safe to call
+   * anywhere: resolves false and keeps mock transport on browsers, in
+   * tests, and when BLE/permission is unavailable. Test seam: inject env.
+   */
+  async enableNativeBle(env?: BleEnvironment): Promise<boolean> {
+    const upgraded = await upgradeToBleIfAvailable(
+      this.selfTransport,
+      DEMO_SELF_NODE_ID,
+      transport => {
+        this.selfTransport = transport;
+        if (transport instanceof BleMeshTransport) {
+          this.selfEngine.setLocalNodeId(transport.getNodeId());
+        }
+        this.selfEngine.setTransport(transport);
+      },
+      env
+    );
+    return upgraded;
+  }
+
+  /**
    * Derive radio links from the visualization topology (range simulator).
    * Link B↔victim follows node B connectivity; the B↔C hop follows node C;
    * the C↔HQ gateway uplink (2.5 km) stays up while node C is up.
@@ -202,7 +238,11 @@ class DemoMeshNetwork {
     const bUp = byId.get(DEMO_RELAY_B_NODE_ID)?.isConnected ?? true;
     const cUp = byId.get(DEMO_RELAY_C_NODE_ID)?.isConnected ?? true;
 
-    this.selfTransport.setConnectedPeers(bUp ? [DEMO_RELAY_B_NODE_ID] : []);
+    // Mock-only range simulation: a real BLE transport discovers its own
+    // peers over the air and ignores the visualization topology.
+    if (this.selfTransport instanceof MockMeshTransport) {
+      this.selfTransport.setConnectedPeers(bUp ? [DEMO_RELAY_B_NODE_ID] : []);
+    }
     this.relayBTransport.setConnectedPeers([
       ...(bUp ? [DEMO_SELF_NODE_ID] : []),
       ...(bUp && cUp ? [DEMO_RELAY_C_NODE_ID] : []),
@@ -228,7 +268,7 @@ class DemoMeshNetwork {
   private makePeerEngine(
     nodeId: string,
     storagePrefix: string,
-    transport: MockMeshTransport
+    transport: MeshTransport
   ): { engine: PacketEngine; repo: SosRepository } {
     const storage = new StorageEngine(storagePrefix);
     storage.clearAll();
@@ -243,7 +283,9 @@ class DemoMeshNetwork {
   }
 
   private applyDefaultTopology(): void {
-    this.selfTransport.setConnectedPeers([DEMO_RELAY_B_NODE_ID]);
+    if (this.selfTransport instanceof MockMeshTransport) {
+      this.selfTransport.setConnectedPeers([DEMO_RELAY_B_NODE_ID]);
+    }
     this.relayBTransport.setConnectedPeers([DEMO_SELF_NODE_ID, DEMO_RELAY_C_NODE_ID]);
     this.relayCTransport.setConnectedPeers([DEMO_RELAY_B_NODE_ID, DEMO_HQ_NODE_ID]);
     this.hqTransport.setConnectedPeers([DEMO_RELAY_C_NODE_ID]);
