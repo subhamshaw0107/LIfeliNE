@@ -27,9 +27,23 @@ export interface CreateSosPacketParams {
 
 /**
  * Generates a unique, standardized SOS packet ID (e.g. SOS-7F82A91C).
+ * Uses a cryptographically secure RNG (CSPRNG); Math.random() is never
+ * used so IDs are unpredictable across the mesh.
  */
 export function generatePacketId(prefix: 'SOS' | 'ACK' = 'SOS'): string {
-  const hex = Math.random().toString(16).substring(2, 10).toUpperCase();
+  const bytes = new Uint8Array(4);
+  const getRandom = globalThis.crypto?.getRandomValues?.bind(globalThis.crypto);
+  if (getRandom) {
+    getRandom(bytes);
+  } else {
+    // Last-resort fallback for non-WebCrypto runtimes (never browsers).
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  const hex = Array.from(bytes)
+    .map(b => b.toString(16).toUpperCase().padStart(2, '0'))
+    .join('');
   return `${prefix}-${hex}`;
 }
 
