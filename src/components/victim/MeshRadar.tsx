@@ -8,7 +8,7 @@ interface Props {
 }
 
 export const MeshRadar: React.FC<Props> = ({ onBack }) => {
-  const { meshNodes, location, meshStatus, user, simpleNetworkStatus, toggleSimulateNodeRange, victimActiveSos, realPeerIds } = useApp();
+  const { meshNodes, location, meshStatus, user, simpleNetworkStatus, toggleSimulateNodeRange, victimActiveSos, realPeerIds, isNative } = useApp();
   const [isNodeInRange, setIsNodeInRange] = useState(true);
 
   // REAL BLE MODE is detected purely from live BLE state: a non-empty
@@ -113,6 +113,18 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
               </button>
             )}
             <h2 style={{ fontSize: 18, fontWeight: 900, color: '#FFF' }}>📡 MESH NETWORK TOPOLOGY</h2>
+            <span style={{
+              fontSize: 10,
+              fontWeight: 800,
+              padding: '2px 8px',
+              borderRadius: 6,
+              marginLeft: 6,
+              background: isNative ? 'rgba(56, 189, 248, 0.15)' : 'rgba(148, 163, 184, 0.15)',
+              color: isNative ? '#38BDF8' : '#94A3B8',
+              border: `1px solid ${isNative ? 'rgba(56, 189, 248, 0.4)' : 'rgba(148, 163, 184, 0.4)'}`
+            }}>
+              {isNative ? 'MODE: HARDWARE BLE MESH' : 'MODE: BROWSER SIMULATOR'}
+            </span>
           </div>
           <span style={{ fontSize: 11, color: '#94A3B8' }}>{isBleMode ? 'Live BLE connections (stable peer IDs)' : 'Offline Multi-Hop Autonomous Relay (A → B → C → D → Rescue)'}</span>
         </div>
@@ -388,7 +400,7 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
       }}>
         <div>
           <div style={{ fontSize: 12, fontWeight: 800, color: '#FFF' }}>
-            Simulate Movement & Store-Carry-Forward
+            {isNative ? '[SIMULATION TEST CONTROLS] Simulate Movement & Store-Carry-Forward' : 'Simulate Movement & Store-Carry-Forward'}
           </div>
           <div style={{ fontSize: 10, color: '#94A3B8' }}>
             Move Person C out of range to test "WAITING FOR RELAY...", then bring back into range to auto-forward.
