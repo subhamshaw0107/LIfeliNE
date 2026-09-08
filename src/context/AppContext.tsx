@@ -19,6 +19,7 @@ import { meshEngine, DEMO_MESH_NODES } from '../services/meshEngine';
 import { audioService } from '../services/audioService';
 import { demoMeshNetwork } from '../services/demoMeshNetwork';
 import { BleMeshTransport } from '../transport/bleMeshTransport';
+import { Capacitor } from '@capacitor/core';
 import { DEMO_STEPS } from '../services/demoRunner';
 import confetti from 'canvas-confetti';
 
@@ -39,6 +40,9 @@ interface AppContextType {
   // Real BLE connected peer IDs (stable native IDs, verbatim).
   // Empty in browser/mock mode; never mapped to demo Person labels.
   realPeerIds: string[];
+  // Runtime platform: true on native Android (Capacitor), false on web.
+  // Native mode auto-activates BleMeshTransport via demoMeshNetwork.
+  isNative: boolean;
   rateLimitState: RateLimitState;
   sosList: SosPacket[];
   victimActiveSos: SosPacket | null;
@@ -272,6 +276,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Real BLE connected peers: stored verbatim, no demo mapping, no
   // fabricated topology. Empty (and silent) in browser/mock mode.
   const [realPeerIds, setRealPeerIds] = useState<string[]>(() => demoMeshNetwork.getRealPeerIds());
+
+  // Platform flag (fixed for the session): native Android activates the
+  // real BleMeshTransport + BLE UUID identity; web stays on the mock demo.
+  const [isNative] = useState<boolean>(() => {
+    try {
+      return Capacitor.isNativePlatform();
+    } catch {
+      return false;
+    }
+  });
 
   // Subscribe to unified-mesh progress snapshots (per-hop route/hopCount,
   // HQ delivery, reverse ACK arrival) and mirror them into UI state.
@@ -672,6 +686,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         meshStatus: effectiveMeshStatus,
         meshNodes,
         realPeerIds,
+        isNative,
         rateLimitState,
         sosList,
         victimActiveSos,

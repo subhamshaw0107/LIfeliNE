@@ -53,13 +53,36 @@ export const TacticalMap: React.FC<Props> = ({ isRescueView = false, onSelectSos
   const [simulateOfflineMapTiles, setSimulateOfflineMapTiles] = useState(false);
   const [activeRedAlertBanner, setActiveRedAlertBanner] = useState<any | null>(null);
 
+  // Non-intrusive engine-fallback notice (auto-dismissed, no layout shift).
+  const [mapNotice, setMapNotice] = useState<string | null>(null);
+  const noticeTimerRef = useRef<number | null>(null);
+  const showMapNotice = (msg: string) => {
+    setMapNotice(msg);
+    if (noticeTimerRef.current) window.clearTimeout(noticeTimerRef.current);
+    noticeTimerRef.current = window.setTimeout(() => setMapNotice(null), 5000);
+  };
+  useEffect(() => () => {
+    if (noticeTimerRef.current) window.clearTimeout(noticeTimerRef.current);
+  }, []);
+
   // Catch Google Maps Authentication Failure (e.g. key domain restrictions, billing, etc.)
   useEffect(() => {
     (window as any).gm_authFailure = () => {
       console.warn("Google Maps API auth check failed - falling back to Offline Tactical Vector Map.");
       setGoogleMapsAuthFailed(true);
       setMapEngine('LEAFLET');
+      showMapNotice('Google Maps API unavailable. Switched to Tactical Offline Map.');
     };
+    // Script load failure (network/offline/blocked): same fallback path.
+    const onScriptError = () => {
+      console.warn("Google Maps script failed to load - falling back to Offline Tactical Vector Map.");
+      setGoogleMapsAuthFailed(true);
+      setMapEngine('LEAFLET');
+      showMapNotice('Google Maps API unavailable. Switched to Tactical Offline Map.');
+    };
+    window.addEventListener('gm_script_error', onScriptError);
+    if ((window as any).__gmScriptError) onScriptError();
+    return () => window.removeEventListener('gm_script_error', onScriptError);
   }, []);
 
   // Check if Google Maps is available in window
@@ -97,7 +120,14 @@ export const TacticalMap: React.FC<Props> = ({ isRescueView = false, onSelectSos
     if (mapEngine !== 'GOOGLE' || !googleMapsLoaded || !googleMapDivRef.current || simulateOfflineMapTiles) return;
 
     try {
-      const gmaps = (window as any).google.maps;
+      const gmaps = (window as any).google?.maps;
+      if (!gmaps) {
+        console.warn("Google Maps API object missing - falling back to Offline Tactical Vector Map.");
+        setGoogleMapsAuthFailed(true);
+        setMapEngine('LEAFLET');
+        showMapNotice('Google Maps API unavailable. Switched to Tactical Offline Map.');
+        return;
+      }
       const centerLatLng = { lat: 22.9785, lng: 88.4395 };
 
       if (!googleMapInstanceRef.current) {
@@ -314,6 +344,7 @@ export const TacticalMap: React.FC<Props> = ({ isRescueView = false, onSelectSos
     } catch (err) {
       console.warn("Google Maps error, auto-falling back to Leaflet:", err);
       setMapEngine('LEAFLET');
+      showMapNotice('Google Maps API unavailable. Switched to Tactical Offline Map.');
     }
   }, [
     mapEngine,
@@ -340,12 +371,19 @@ export const TacticalMap: React.FC<Props> = ({ isRescueView = false, onSelectSos
         attributionControl: false
       });
 
-      // CartoDB dark tiles (public raster, no API key) with required attribution
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: 'abc',
+      // CartoDB dark tiles (public raster, no API key) with required attribution.
+      // Offline handling: failed tile images are hidden so hazard zones,
+      // SOS pins, and grid overlays keep rendering on a clean canvas.
+      const baseTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        subdomains: 'abcd',
         maxZoom: 19
-      }).addTo(map);
+      });
+      baseTiles.on('tileerror', (e: L.TileEvent) => {
+        const tile = e.tile as HTMLImageElement | undefined;
+        if (tile) tile.style.display = 'none';
+      });
+      baseTiles.addTo(map);
 
       const markersGroup = L.layerGroup().addTo(map);
       leafletMarkersRef.current = markersGroup;
@@ -547,6 +585,29 @@ export const TacticalMap: React.FC<Props> = ({ isRescueView = false, onSelectSos
         }}
       >
         <HardwareStatusStrip />
+
+        {/* Engine-fallback toast (fixed overlay: no layout shift) */}
+        {mapNotice && (
+          <div style={{
+            position: 'fixed',
+            bottom: 76,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 9999,
+            background: 'rgba(15, 23, 42, 0.96)',
+            border: '1px solid rgba(245, 158, 11, 0.5)',
+            color: '#FDE68A',
+            fontSize: 11,
+            fontWeight: 700,
+            padding: '8px 14px',
+            borderRadius: 10,
+            boxShadow: '0 4px 18px rgba(0,0,0,0.5)',
+            maxWidth: '92vw',
+            textAlign: 'center'
+          }}>
+            {mapNotice}
+          </div>
+        )}
 
         {/* GPS Live Telemetry Pill & Engine Selector */}
         <div
