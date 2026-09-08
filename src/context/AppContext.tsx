@@ -18,6 +18,7 @@ import { storageService } from '../services/storageService';
 import { meshEngine, DEMO_MESH_NODES } from '../services/meshEngine';
 import { audioService } from '../services/audioService';
 import { demoMeshNetwork } from '../services/demoMeshNetwork';
+import { BleMeshTransport } from '../transport/bleMeshTransport';
 import { DEMO_STEPS } from '../services/demoRunner';
 import confetti from 'canvas-confetti';
 
@@ -35,6 +36,9 @@ interface AppContextType {
   disasterZones: DisasterZone[];
   meshStatus: MeshStatus;
   meshNodes: MeshNode[];
+  // Real BLE connected peer IDs (stable native IDs, verbatim).
+  // Empty in browser/mock mode; never mapped to demo Person labels.
+  realPeerIds: string[];
   rateLimitState: RateLimitState;
   sosList: SosPacket[];
   victimActiveSos: SosPacket | null;
@@ -189,6 +193,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   });
   const [role, setRole] = useState<UserRole>('VICTIM');
 
+  // Local identity: REAL BLE mode uses the native persisted stable UUID
+  // (SharedPreferences via BleMeshTransport — same ID across disconnects
+  // and restarts, never a MAC, never React-generated). DEMO/mock mode has
+  // no BLE identity, so the login/demo user (PERSON-A) applies untouched.
+  // Re-evaluated every render (incl. the 1s tick), so a late BLE upgrade
+  // takes effect within a second. Only userId is overridden; display
+  // name, role, and login/logout ownership stay exactly as before.
+  const bleLocalId = demoMeshNetwork.getLocalBleId();
+  const effectiveUser: UserAccount | null =
+    bleLocalId && user ? { ...user, userId: bleLocalId } : user;
+
   // Network offline state (pure mesh simulation)
   const [isInternetDown, setIsInternetDown] = useState<boolean>(true);
 
@@ -254,6 +269,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return () => unsub();
   }, []);
 
+  // Real BLE connected peers: stored verbatim, no demo mapping, no
+  // fabricated topology. Empty (and silent) in browser/mock mode.
+  const [realPeerIds, setRealPeerIds] = useState<string[]>(() => demoMeshNetwork.getRealPeerIds());
+
   // Subscribe to unified-mesh progress snapshots (per-hop route/hopCount,
   // HQ delivery, reverse ACK arrival) and mirror them into UI state.
   useEffect(() => {
@@ -268,6 +287,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (!prev.some(p => p.id === progress.packetId)) return prev;
         return prev.map(p => (p.id === progress.packetId ? snapshot : p));
       });
+    });
+    return () => unsub();
+  }, []);
+
+  // Subscribe to real BLE connected-peer changes. IDs arrive verbatim
+  // (e.g. ["DEVICE-ABC"]) and are stored as-is — no Person labels,
+  // no coordinates, no topology fabrication. Demo/mock mode never fires.
+  useEffect(() => {
+    const unsub = demoMeshNetwork.onRealPeersChanged(peerIds => {
+      setRealPeerIds([...peerIds]);
     });
     return () => unsub();
   }, []);
@@ -393,8 +422,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const riskEval = geoService.evaluateDisasterRisk(location.latitude, location.longitude, disasterZones);
     const autoPriority = calculatePriorityFromRisk(riskEval.riskLevel);
 
-    // 4. Extract senderId (never include password or unnecessary info)
-    const senderId = user?.userId?.trim() || 'PERSON-A';
+    // 4. Extract senderId (effectiveUser carries the BLE UUID in real mode)
+    const senderId = effectiveUser?.userId?.trim() || 'PERSON-A';
 
     // Create raw payload with senderId and automatically calculated priority
     const rawPayload = {
@@ -614,10 +643,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [isDemoActive, demoStep, demoAutoPlay]);
 
+  // Effective mesh status. REAL BLE mode (self radio is a live
+  // BleMeshTransport): derives strictly from live peer presence —
+  // 1+ peers CONNECTED, 0 peers OFFLINE (the MeshStatus union's
+  // disconnected member; renders red downstream). No demo nodes,
+  // distances, or topology involved. DEMO/browser mode: the existing
+  // meshEngine-driven meshStatus state passes through untouched.
+  // Re-evaluated every render (incl. the 1s tick), so a late BLE
+  // upgrade flips the indicator within a second, no extra timers.
+  const bleTransportActive = demoMeshNetwork.selfTransport instanceof BleMeshTransport;
+  const effectiveMeshStatus: MeshStatus = bleTransportActive
+    ? (realPeerIds.length > 0 ? 'CONNECTED' : 'OFFLINE')
+    : meshStatus;
+
   return (
     <AppContext.Provider
       value={{
-        user,
+        user: effectiveUser,
         role,
         setRole,
         login,
@@ -627,8 +669,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         location,
         updateLocation,
         disasterZones,
-        meshStatus,
+        meshStatus: effectiveMeshStatus,
         meshNodes,
+        realPeerIds,
         rateLimitState,
         sosList,
         victimActiveSos,

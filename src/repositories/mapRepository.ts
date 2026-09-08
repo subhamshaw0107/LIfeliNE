@@ -74,6 +74,18 @@ export class MapRepository {
     return SAFE_SHELTERS;
   }
 
+  /**
+   * Mesh-node geographic markers, DEMO/SIMULATOR scope only.
+   *
+   * Source is the simulator's fixed DEMO_MESH_NODES coordinates — never
+   * real BLE peers. A real BLE peer UUID carries NO trusted coordinates
+   * (not invented, not random, not the local GPS fix, not a MAC-derived
+   * value), so BLE peers must be OMITTED from this geographic layer
+   * rather than mapped onto Person-B/C/D/HQ positions. Peer-derived
+   * geography on the map comes exclusively from SOS packet lat/lon
+   * (getSOSLocations), which belongs to the packet and is valid data.
+   * Applies equally to the Leaflet and Google Maps render paths.
+   */
   getMeshNodes(): MeshNode[] {
     return DEMO_MESH_NODES;
   }

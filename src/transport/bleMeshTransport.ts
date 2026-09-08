@@ -45,6 +45,9 @@ export type BlePacketEvent = { peerId: string; data: string };
 export type BlePeerEvent = { peerId: string };
 export type BleFoundEvent = { address: string; name: string; rssi: number };
 
+/** Peer-set change notification (snapshot array, never the live Set). */
+export type PeersChangedCallback = (peerIds: string[]) => void;
+
 /**
  * Minimal surface of the native "BleMesh" Capacitor plugin consumed by
  * BleMeshTransport. Mirrors BleMeshPlugin.kt one-to-one.
@@ -93,6 +96,8 @@ export class BleMeshTransport implements MeshTransport {
   private nodeId: string;
   private readonly bridge: BleNativeBridge;
   private listeners: PacketReceivedCallback[] = [];
+  private peerListeners: PeersChangedCallback[] = [];
+  private connectedPeers: Set<string> = new Set();
   private bridgeSubscribed = false;
   private bridgeHandles: BleListenerHandle[] = [];
   private started = false;
@@ -167,6 +172,8 @@ export class BleMeshTransport implements MeshTransport {
     this.bridgeHandles = [];
     this.bridgeSubscribed = false;
     this.listeners = [];
+    this.peerListeners = [];
+    this.connectedPeers.clear();
   }
 
   async sendPacket(peerId: string, packetBytes: Uint8Array): Promise<boolean> {
@@ -229,8 +236,62 @@ export class BleMeshTransport implements MeshTransport {
         this.deliverFromBridge(payload);
       });
       this.bridgeHandles.push(handle);
+      const connectedHandle = await this.bridge.addListener('peerConnected', payload => {
+        this.handlePeerConnected(payload);
+      });
+      this.bridgeHandles.push(connectedHandle);
+      const disconnectedHandle = await this.bridge.addListener('peerDisconnected', payload => {
+        this.handlePeerDisconnected(payload);
+      });
+      this.bridgeHandles.push(disconnectedHandle);
+      // Discovery only: a found peer is NOT connected — tracked nowhere,
+      // subscription kept so future consumers can observe scan results.
+      const foundHandle = await this.bridge.addListener('peerFound', () => undefined);
+      this.bridgeHandles.push(foundHandle);
     } catch {
       this.bridgeSubscribed = false;
+    }
+  }
+
+  /**
+   * Observe the connected-peer set. Fires with a snapshot array on every
+   * connect/disconnect (never the mutable Set). Discovery (peerFound)
+   * never triggers this — found is not connected.
+   */
+  onPeersChanged(callback: PeersChangedCallback): () => void {
+    this.peerListeners.push(callback);
+    // Lazily wire bridge events even if start() was never called.
+    void this.ensureSubscribed();
+    return () => {
+      this.peerListeners = this.peerListeners.filter(cb => cb !== callback);
+    };
+  }
+
+  private handlePeerConnected(payload: BlePeerEvent): void {
+    if (payload == null || typeof payload.peerId !== 'string' || payload.peerId.length === 0) {
+      return;
+    }
+    if (this.connectedPeers.has(payload.peerId)) return;
+    this.connectedPeers.add(payload.peerId);
+    this.notifyPeerListeners();
+  }
+
+  private handlePeerDisconnected(payload: BlePeerEvent): void {
+    if (payload == null || typeof payload.peerId !== 'string' || payload.peerId.length === 0) {
+      return;
+    }
+    if (!this.connectedPeers.delete(payload.peerId)) return;
+    this.notifyPeerListeners();
+  }
+
+  private notifyPeerListeners(): void {
+    const snapshot = [...this.connectedPeers];
+    for (const listener of [...this.peerListeners]) {
+      try {
+        listener(snapshot);
+      } catch {
+        // One bad consumer must not break notification to the rest.
+      }
     }
   }
 

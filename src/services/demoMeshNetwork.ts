@@ -100,6 +100,15 @@ class DemoMeshNetwork {
   private progressListeners: ProgressCallback[] = [];
   private authInit: Promise<boolean> | null = null;
 
+  /**
+   * Latest real BLE connected-peer snapshot (stable native IDs, verbatim).
+   * Empty unless selfTransport is a live BleMeshTransport. Virtual demo
+   * nodes (B/C/HQ) never appear here.
+   */
+  private realPeerIds: string[] = [];
+  private realPeerListeners: Array<(peerIds: string[]) => void> = [];
+  private realPeersUnsub: (() => void) | null = null;
+
   constructor() {
     // This device owns one transport; virtual peers own theirs.
     this.selfTransport = createSelfTransport(DEMO_SELF_NODE_ID);
@@ -112,6 +121,9 @@ class DemoMeshNetwork {
     // ACKs and status updates are visible to the Rescue dashboard.
     this.selfEngine.setLocalNodeId(DEMO_SELF_NODE_ID);
     this.selfEngine.setTransport(this.selfTransport);
+    // Mock selfTransport has no real peers; a later BLE swap subscribes
+    // via watchRealPeers() inside enableNativeBle().
+    this.watchRealPeers();
     // Opportunistic radio upgrade: real BLE on capable Android, mock
     // everywhere else (no-op there). Virtual peers are untouched.
     void this.enableNativeBle();
@@ -258,10 +270,74 @@ class DemoMeshNetwork {
           this.selfEngine.setLocalNodeId(transport.getNodeId());
         }
         this.selfEngine.setTransport(transport);
+        this.watchRealPeers();
       },
       env
     );
     return upgraded;
+  }
+
+  /**
+   * This device's stable BLE identity, sourced from the native layer's
+   * persisted UUID (SharedPreferences) via BleMeshTransport.getNodeId().
+   * Returns null unless selfTransport is a live, started BleMeshTransport —
+   * so no random/React-generated ID ever competes with the native one,
+   * and mock mode never reports a BLE identity.
+   */
+  getLocalBleId(): string | null {
+    if (!(this.selfTransport instanceof BleMeshTransport)) return null;
+    const id = this.selfTransport.getNodeId();
+    return id && id.length > 0 ? id : null;
+  }
+
+  /**
+   * Current real BLE connected-peer IDs (verbatim stable native IDs).
+   * Empty array unless selfTransport is a live BleMeshTransport.
+   */
+  getRealPeerIds(): string[] {
+    return [...this.realPeerIds];
+  }
+
+  /**
+   * Observe real BLE connected-peer changes. Fires with the exact snapshot
+   * reported by BleMeshTransport on every connect/disconnect — IDs are
+   * forwarded unmodified (never mapped to Person A/B/C/D, no coordinates).
+   * Mock transports have no real peers and never trigger this.
+   */
+  onRealPeersChanged(callback: (peerIds: string[]) => void): () => void {
+    this.realPeerListeners.push(callback);
+    return () => {
+      this.realPeerListeners = this.realPeerListeners.filter(cb => cb !== callback);
+    };
+  }
+
+  /**
+   * (Re)subscribe to the self transport's peer events when it is a real
+   * BleMeshTransport; otherwise clear any stale subscription and IDs.
+   * Virtual B/C/HQ demo transports are never watched.
+   */
+  private watchRealPeers(): void {
+    if (this.realPeersUnsub) {
+      try {
+        this.realPeersUnsub();
+      } catch {
+        // ignore teardown races
+      }
+      this.realPeersUnsub = null;
+    }
+    if (!(this.selfTransport instanceof BleMeshTransport)) {
+      return;
+    }
+    this.realPeersUnsub = this.selfTransport.onPeersChanged(peerIds => {
+      this.realPeerIds = [...peerIds];
+      for (const listener of [...this.realPeerListeners]) {
+        try {
+          listener([...this.realPeerIds]);
+        } catch {
+          // One bad consumer must not break notification to the rest.
+        }
+      }
+    });
   }
 
   /**

@@ -8,8 +8,13 @@ interface Props {
 }
 
 export const MeshRadar: React.FC<Props> = ({ onBack }) => {
-  const { meshNodes, location, meshStatus, user, simpleNetworkStatus, toggleSimulateNodeRange, victimActiveSos } = useApp();
+  const { meshNodes, location, meshStatus, user, simpleNetworkStatus, toggleSimulateNodeRange, victimActiveSos, realPeerIds } = useApp();
   const [isNodeInRange, setIsNodeInRange] = useState(true);
+
+  // REAL BLE MODE is detected purely from live BLE state: a non-empty
+  // realPeerIds means physically connected peers exist right now.
+  // Mock/demo mode keeps realPeerIds empty and uses the demo view below.
+  const isBleMode = realPeerIds.length > 0;
 
   // Toggle simulate Person C entering/leaving range
   const handleToggleRange = () => {
@@ -17,8 +22,28 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
     setIsNodeInRange(res);
   };
 
-  // Multi-hop path definitions matching the user requirement:
-  // PERSON A -> PERSON B -> PERSON C -> PERSON D -> RESCUE CENTER
+  // REAL BLE peer cards: actual connected peer IDs only. Unknown fields
+  // stay neutral (N/A) — never invented coordinates/battery/distance.
+  const realHops = [
+    {
+      id: 'LOCAL-DEVICE',
+      title: `YOU (${user?.phoneId || 'DEV'})`,
+      sub: 'This device',
+      status: 'SOURCE',
+      dist: '0.0 km',
+      inRange: true
+    },
+    ...realPeerIds.map(peerId => ({
+      id: peerId,
+      title: peerId,
+      sub: 'BLE peer • connected',
+      status: 'CONNECTED',
+      dist: 'N/A',
+      inRange: true
+    }))
+  ];
+
+  // Demo view (unchanged): PERSON A -> B -> C -> D -> RESCUE CENTER chain.
   const hops = [
     {
       id: 'PERSON_A',
@@ -62,6 +87,9 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
     }
   ];
 
+  // Demo hop list (mock Person chain) vs live BLE peer list.
+  const displayHops = isBleMode ? realHops : hops;
+
   return (
     <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* Header with back option if requested */}
@@ -86,7 +114,7 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
             )}
             <h2 style={{ fontSize: 18, fontWeight: 900, color: '#FFF' }}>📡 MESH NETWORK TOPOLOGY</h2>
           </div>
-          <span style={{ fontSize: 11, color: '#94A3B8' }}>Offline Multi-Hop Autonomous Relay (A → B → C → D → Rescue)</span>
+          <span style={{ fontSize: 11, color: '#94A3B8' }}>{isBleMode ? 'Live BLE connections (stable peer IDs)' : 'Offline Multi-Hop Autonomous Relay (A → B → C → D → Rescue)'}</span>
         </div>
       </div>
 
@@ -161,7 +189,7 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {hops.map((hop, idx) => (
+          {displayHops.map((hop, idx) => (
             <React.Fragment key={hop.id}>
               <div style={{
                 display: 'flex',
@@ -185,7 +213,7 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
                     fontSize: 10,
                     fontWeight: 800
                   }}>
-                    {idx === 0 ? 'A' : idx === 1 ? 'B' : idx === 2 ? 'C' : idx === 3 ? 'D' : 'HQ'}
+                    {idx === 0 ? (isBleMode ? '●' : 'A') : isBleMode ? `${idx}` : idx === 1 ? 'B' : idx === 2 ? 'C' : idx === 3 ? 'D' : 'HQ'}
                   </div>
 
                   <div>
@@ -276,11 +304,42 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
           boxShadow: '0 0 14px rgba(239,68,68,0.8)',
           zIndex: 3
         }}>
-          PERSON A (YOU)
+          {isBleMode ? 'YOU' : 'PERSON A (YOU)'}
         </div>
 
-        {/* Floating Relay Nodes */}
-        {meshNodes.map((n, idx) => {
+        {/* Floating Relay Nodes: live BLE peers (evenly placed, no invented
+            positions/distances) vs demo meshNodes (unchanged below) */}
+        {isBleMode
+          ? realPeerIds.map((peerId, idx) => {
+              const angle = (idx / realPeerIds.length) * 2 * Math.PI - Math.PI / 2;
+              const radius = 64;
+              const x = Math.cos(angle) * radius;
+              const y = Math.sin(angle) * radius;
+              const label = peerId.length > 12 ? `${peerId.slice(0, 8)}…` : peerId;
+              return (
+                <div
+                  key={peerId}
+                  style={{
+                    position: 'absolute',
+                    top: `calc(50% + ${y}px)`,
+                    left: `calc(50% + ${x}px)`,
+                    transform: 'translate(-50%, -50%)',
+                    background: 'rgba(16, 185, 129, 0.9)',
+                    color: '#FFF',
+                    padding: '3px 7px',
+                    borderRadius: 10,
+                    fontSize: 9,
+                    fontWeight: 800,
+                    boxShadow: '0 0 10px rgba(16, 185, 129, 0.6)',
+                    zIndex: 2,
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {label}
+                </div>
+              );
+            })
+          : meshNodes.map((n, idx) => {
           const angle = (idx / meshNodes.length) * 2 * Math.PI - Math.PI / 2;
           const radius = n.isConnected ? 58 : 86;
           const x = Math.cos(angle) * radius;
@@ -311,11 +370,12 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
         })}
 
         <div style={{ marginTop: 'auto', paddingTop: 130, fontSize: 10, color: '#64748B', textAlign: 'center' }}>
-          Configured direct connection range: 1.0 km
+          {isBleMode ? 'Live BLE peers (physical radio range varies)' : 'Configured direct connection range: 1.0 km'}
         </div>
       </div>
 
-      {/* Interactive Range Simulator Trigger */}
+      {/* Interactive Range Simulator Trigger (demo only: hidden in BLE mode) */}
+      {!isBleMode && (
       <div style={{
         background: 'rgba(56, 189, 248, 0.08)',
         border: '1px solid rgba(56, 189, 248, 0.25)',
@@ -356,6 +416,7 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
           Toggle Range
         </button>
       </div>
+      )}
     </div>
   );
 };
