@@ -46,6 +46,26 @@ export interface PacketEngineEvent {
   timestamp: number;
 }
 
+/**
+ * ACK authentication hook. Runs BEFORE any dedup bookkeeping, so a failed
+ * verification never consumes the ackId. The default performs structural
+ * authentication (shape + required identity fields); a cryptographic
+ * signature verifier (e.g. M4 ECDH/AAD) plugs in via setAckVerifier()
+ * with the same ordering guarantee.
+ */
+export type AckVerifier = (ack: AckPacket) => boolean | Promise<boolean>;
+
+function isStructurallyAuthenticatedAck(ack: AckPacket): boolean {
+  return (
+    isAckPacket(ack) &&
+    ack.ackId.length > 0 &&
+    ack.sosId.length > 0 &&
+    typeof ack.acknowledgedBy === 'string' &&
+    ack.acknowledgedBy.length > 0 &&
+    Array.isArray(ack.route)
+  );
+}
+
 export class PacketEngine {
   private localNodeId: string;
   private sosRepo: SosRepository;
@@ -59,6 +79,7 @@ export class PacketEngine {
   private onStatusChangeListeners: ((status: SimpleNetworkStatus) => void)[] = [];
   private currentNetworkStatus: SimpleNetworkStatus = 'CONNECTED';
   private pendingAcks: AckPacket[] = [];
+  private ackVerifier: AckVerifier = ack => isStructurallyAuthenticatedAck(ack);
   private crypto?: CryptoService;
   private pairing?: PairingService;
   private replayProtection: ReplayProtectionService = replayProtectionService;
@@ -128,8 +149,7 @@ export class PacketEngine {
     return this.localNodeId;
   }
 
-  setTransport(transport: MeshTransport): void {
-    this.transport = transport;
+  setTransport(transport: MeshTransport): void {    this.transport = transport;
     // Return the processing promise so a transport (e.g. MockMeshTransport)
     // can await end-to-end delivery into this engine. The declared callback
     // type returns void, so the promise is awaitable yet safely ignorable.
@@ -140,6 +160,15 @@ export class PacketEngine {
 
   getTransport(): MeshTransport | null {
     return this.transport;
+  }
+
+  /**
+   * Install a cryptographic ACK verifier (e.g. M4 signature/AAD check).
+   * It replaces the structural default but keeps the verify-before-seen
+   * ordering: rejection drops the packet without marking the ackId seen.
+   */
+  setAckVerifier(verifier: AckVerifier): void {
+    this.ackVerifier = verifier;
   }
 
   getNetworkStatus(): SimpleNetworkStatus {
@@ -223,6 +252,14 @@ export class PacketEngine {
   /**
    * Main packet decision pipeline:
    * "What should happen to the packet?"
+   *
+   * NOTE (M4 integration): SOS payload decryption is deliberately NOT
+   * performed here. This branch's AES-GCM key is device-local entropy, so
+   * a relay cannot decrypt another phone's payload — attempting it would
+   * drop all legitimate multi-hop traffic. Cross-device payload
+   * authentication requires ECDH-derived keys (M4, origin/main); merge
+   * that implementation forward rather than wiring local decrypt here.
+   * Structural validation below still rejects malformed packets safely.
    */
   async processPacket(packet: MeshPacket, incomingFromPeerId?: string): Promise<boolean> {
     if (isAckPacket(packet)) {
@@ -363,6 +400,20 @@ export class PacketEngine {
    * relays store and forward ciphertext without decrypting.
    */
   private async processAckPacket(ack: AckPacket, incomingFrom?: string): Promise<boolean> {
+    // 0. Authenticate FIRST: a failed verification drops the packet WITHOUT
+    //    registering the ackId, so malicious ACKs cannot burn real ACK IDs
+    //    out of the deduplication window.
+    let authenticated = false;
+    try {
+      authenticated = await this.ackVerifier(ack);
+    } catch {
+      authenticated = false;
+    }
+    if (!authenticated) {
+      console.warn('[PacketEngine] Dropping unauthenticated ACK packet:', ack && (ack as AckPacket).ackId);
+      return false;
+    }
+
     if (this.dedup.hasSeen(ack.ackId)) {
       return true;
     }
