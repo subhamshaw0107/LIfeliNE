@@ -23,6 +23,7 @@ export interface CreateSosPacketParams {
   batteryLevel?: number;
   encryptedPayload?: string;
   iv?: string;
+  recipientId?: string;
 }
 
 /**
@@ -88,6 +89,7 @@ export function createSosPacket(params: CreateSosPacketParams): SosPacket {
     iv: params.iv || '',
     batteryLevel: params.batteryLevel ?? 100,
     createdAt: now,
+    recipientId: params.recipientId,
     statusHistory: [
       {
         status: initialStatus,
@@ -130,6 +132,110 @@ export function isAckPacket(packet: unknown): packet is AckPacket {
   if (!packet || typeof packet !== 'object') return false;
   const p = packet as Record<string, unknown>;
   return p.kind === 'ACK' && typeof p.sosId === 'string' && typeof p.ackId === 'string';
+}
+
+/** Placeholder stored on the mesh ACK so relays never persist inner ACK plaintext. */
+export const AUTHENTICATED_ACK_PLACEHOLDER = '[AUTHENTICATED ACK]';
+
+/**
+ * Mesh ACK carrying M4 authenticated ciphertext (compatibility layer over AckPacket).
+ */
+export function isAuthenticatedMeshAck(packet: unknown): packet is AckPacket {
+  if (!isAckPacket(packet)) return false;
+  return (
+    typeof packet.encryptedPayload === 'string' &&
+    packet.encryptedPayload.length > 0 &&
+    typeof packet.iv === 'string' &&
+    packet.iv.length === 24 &&
+    typeof packet.senderId === 'string' &&
+    typeof packet.recipientId === 'string' &&
+    typeof packet.createdAt === 'number'
+  );
+}
+
+/**
+ * Wraps an M4 AuthenticatedAckPacket into the existing M3 AckPacket relay shape.
+ * Inner note stays inside ciphertext; mesh `note` is a public placeholder only.
+ */
+export function toMeshAuthenticatedAck(
+  auth: {
+    ackId: string;
+    sosId: string;
+    senderId: string;
+    recipientId: string;
+    deviceId: string;
+    createdAt: number;
+    status: AckPacket['status'];
+    encryptedPayload: string;
+    iv: string;
+    algorithm: string;
+    hopCount: number;
+    ttl: number;
+    route: string[];
+  },
+  originalSenderId: string,
+  meshOriginNodeId: string
+): AckPacket {
+  return {
+    kind: 'ACK',
+    ackId: auth.ackId,
+    sosId: auth.sosId,
+    acknowledgedBy: auth.senderId,
+    acknowledgedAt: auth.createdAt,
+    originalSenderId,
+    hopCount: 0,
+    ttl: 7,
+    route: [meshOriginNodeId],
+    status: auth.status,
+    note: AUTHENTICATED_ACK_PLACEHOLDER,
+    encryptedPayload: auth.encryptedPayload,
+    iv: auth.iv,
+    algorithm: auth.algorithm,
+    senderId: auth.senderId,
+    recipientId: auth.recipientId,
+    deviceId: auth.deviceId,
+    createdAt: auth.createdAt
+  };
+}
+
+/**
+ * Extracts M4 authenticated ACK fields from a relayed mesh AckPacket.
+ */
+export function fromMeshAuthenticatedAck(ack: AckPacket): {
+  kind: 'ACK';
+  ackId: string;
+  sosId: string;
+  senderId: string;
+  recipientId: string;
+  deviceId: string;
+  createdAt: number;
+  status: AckPacket['status'];
+  encryptedPayload: string;
+  iv: string;
+  algorithm: string;
+  hopCount: number;
+  ttl: number;
+  route: string[];
+} | null {
+  if (!isAuthenticatedMeshAck(ack) || !ack.senderId || !ack.recipientId || !ack.encryptedPayload || !ack.iv || ack.createdAt === undefined) {
+    return null;
+  }
+  return {
+    kind: 'ACK',
+    ackId: ack.ackId,
+    sosId: ack.sosId,
+    senderId: ack.senderId,
+    recipientId: ack.recipientId,
+    deviceId: ack.deviceId || ack.senderId,
+    createdAt: ack.createdAt,
+    status: ack.status,
+    encryptedPayload: ack.encryptedPayload,
+    iv: ack.iv,
+    algorithm: ack.algorithm || 'AES-GCM-256 (ACK-AAD-Authenticated)',
+    hopCount: ack.hopCount,
+    ttl: ack.ttl,
+    route: ack.route
+  };
 }
 
 /**

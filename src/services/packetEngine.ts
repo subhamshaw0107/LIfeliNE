@@ -8,13 +8,24 @@ import {
   createAckPacket,
   createSosPacket,
   CreateSosPacketParams,
-  MeshPacket
+  MeshPacket,
+  isAuthenticatedMeshAck,
+  toMeshAuthenticatedAck,
+  fromMeshAuthenticatedAck
 } from '../models/Packet';
 import { sosRepository, SosRepository } from '../repositories/sosRepository';
 import { deduplicationService, DeduplicationService } from './deduplicationService';
 import { storeCarryForwardQueue, StoreCarryForwardQueue } from './storeCarryForwardQueue';
 import { geoTriageService, GeoTriageService } from './geoTriageService';
 import { MeshTransport } from '../transport/meshTransport';
+import {
+  CryptoService,
+  PairingService,
+  ReplayProtectionService,
+  replayProtectionService,
+  AuthenticatedAckStatus,
+  AckVerifyStatus
+} from './cryptoService';
 
 export type PacketEngineEventType =
   | 'STORE'
@@ -69,6 +80,15 @@ export class PacketEngine {
   private currentNetworkStatus: SimpleNetworkStatus = 'CONNECTED';
   private pendingAcks: AckPacket[] = [];
   private ackVerifier: AckVerifier = ack => isStructurallyAuthenticatedAck(ack);
+  private crypto?: CryptoService;
+  private pairing?: PairingService;
+  private replayProtection: ReplayProtectionService = replayProtectionService;
+  private lastAuthenticatedAckVerification: {
+    ackId: string;
+    success: boolean;
+    status: AckVerifyStatus;
+    payload: Record<string, unknown> | null;
+  } | null = null;
 
   constructor(options?: {
     localNodeId?: string;
@@ -77,15 +97,48 @@ export class PacketEngine {
     queue?: StoreCarryForwardQueue;
     triage?: GeoTriageService;
     transport?: MeshTransport;
+    crypto?: CryptoService;
+    pairing?: PairingService;
+    replayProtection?: ReplayProtectionService;
   }) {
     this.localNodeId = options?.localNodeId || 'NODE-LOCAL';
     this.sosRepo = options?.sosRepo || sosRepository;
     this.dedup = options?.dedup || deduplicationService;
     this.queue = options?.queue || new StoreCarryForwardQueue();
     this.triage = options?.triage || geoTriageService;
+    this.crypto = options?.crypto;
+    this.pairing = options?.pairing;
+    if (options?.replayProtection) {
+      this.replayProtection = options.replayProtection;
+    }
     if (options?.transport) {
       this.setTransport(options.transport);
     }
+  }
+
+  /**
+   * Optional M4 context for authenticated ACK create/verify on this node.
+   * Unauthenticated M3 acknowledgeSos() does not require this.
+   */
+  setAuthenticatedAckContext(
+    crypto: CryptoService,
+    pairing: PairingService,
+    replayProtection?: ReplayProtectionService
+  ): void {
+    this.crypto = crypto;
+    this.pairing = pairing;
+    if (replayProtection) {
+      this.replayProtection = replayProtection;
+    }
+  }
+
+  getLastAuthenticatedAckVerification(): {
+    ackId: string;
+    success: boolean;
+    status: AckVerifyStatus;
+    payload: Record<string, unknown> | null;
+  } | null {
+    return this.lastAuthenticatedAckVerification;
   }
 
   setLocalNodeId(id: string): void {
@@ -341,7 +394,10 @@ export class PacketEngine {
   }
 
   /**
-   * Pipeline for incoming AckPackets
+   * Pipeline for incoming AckPackets.
+   * Unauthenticated M3 ACKs keep the existing store/relay/victim-update path.
+   * Authenticated M4 ACKs are verified only at the original sender (A);
+   * relays store and forward ciphertext without decrypting.
    */
   private async processAckPacket(ack: AckPacket, incomingFrom?: string): Promise<boolean> {
     // 0. Authenticate FIRST: a failed verification drops the packet WITHOUT
@@ -361,9 +417,63 @@ export class PacketEngine {
     if (this.dedup.hasSeen(ack.ackId)) {
       return true;
     }
+
+    const localSos = this.sosRepo.getPacket(ack.sosId);
+    const isOriginalVictim =
+      this.localNodeId === ack.originalSenderId ||
+      (localSos !== null && (localSos.senderId === this.localNodeId || localSos.deviceId === this.localNodeId)) ||
+      (localSos !== null && localSos.route.length === 0);
+
+    if (isAuthenticatedMeshAck(ack) && isOriginalVictim) {
+      this.dedup.markSeen(ack.ackId);
+      const auth = fromMeshAuthenticatedAck(ack);
+      if (!auth || !this.crypto || !this.pairing) {
+        this.lastAuthenticatedAckVerification = {
+          ackId: ack.ackId,
+          success: false,
+          status: 'REJECT_AUTH_FAILED',
+          payload: null
+        };
+        return false;
+      }
+
+      const expectedRecipient = await this.crypto.getDeviceId();
+      const result = await this.crypto.verifyAndDecryptAck(
+        auth,
+        expectedRecipient,
+        this.pairing,
+        this.replayProtection
+      );
+      this.lastAuthenticatedAckVerification = {
+        ackId: ack.ackId,
+        success: result.success,
+        status: result.status,
+        payload: result.payload
+      };
+      if (!result.success) {
+        return false;
+      }
+
+      this.sosRepo.saveAck(ack);
+      this.emitEvent({
+        type: 'ACK_RECEIVED',
+        nodeId: this.localNodeId,
+        packetId: ack.ackId,
+        message: `[ACK RECEIVED] Authenticated ACK for SOS ${ack.sosId} from ${ack.acknowledgedBy}`,
+        timestamp: Date.now()
+      });
+      this.onAckReceivedListeners.forEach(cb => cb(ack));
+      this.sosRepo.updateStatus(
+        ack.sosId,
+        ack.status,
+        `Authenticated ACK confirmed on victim device from ${ack.acknowledgedBy}`
+      );
+      return true;
+    }
+
     this.dedup.markSeen(ack.ackId);
 
-    // Store ACK and update parent SOS status in local repository
+    // Store ACK and update parent SOS status in local repository (relay / M3 path)
     this.sosRepo.saveAck(ack);
 
     this.emitEvent({
@@ -375,18 +485,6 @@ export class PacketEngine {
     });
 
     this.onAckReceivedListeners.forEach(cb => cb(ack));
-
-    // Check if this node is the original victim device.
-    // Three ways to detect originator:
-    //  1. localNodeId matches ack.originalSenderId (direct node-ID match)
-    //  2. localSos exists and senderId/deviceId matches localNodeId (uncommon but possible when node=person)
-    //  3. localSos exists with an empty route — the SOS was created at this node (route starts empty
-    //     and only gets populated as it hops; relay nodes receive packets with route.length >= 1)
-    const localSos = this.sosRepo.getPacket(ack.sosId);
-    const isOriginalVictim =
-      this.localNodeId === ack.originalSenderId ||
-      (localSos !== null && (localSos.senderId === this.localNodeId || localSos.deviceId === this.localNodeId)) ||
-      (localSos !== null && localSos.route.length === 0);
 
     if (isOriginalVictim) {
       this.sosRepo.updateStatus(
@@ -407,7 +505,6 @@ export class PacketEngine {
       };
       const sent = await this.attemptForwardingAck(relayedAck);
       if (!sent) {
-        // Peer not currently in range: hold in pending ACKs queue for store-and-forward
         if (!this.pendingAcks.some(a => a.ackId === relayedAck.ackId)) {
           this.pendingAcks.push(relayedAck);
         }
@@ -563,6 +660,62 @@ export class PacketEngine {
     }
 
     return ack;
+  }
+
+  /**
+   * Create an M4 authenticated ACK for a stored SOS and send it on the existing
+   * reverse mesh path. Caller must already have successfully received/decrypted
+   * the SOS. Relays forward the wrapped AckPacket without the inner key.
+   */
+  async acknowledgeSosAuthenticated(
+    sosId: string,
+    status: AuthenticatedAckStatus = 'ACKNOWLEDGED',
+    note?: string,
+    options?: { createdAt?: number; ackId?: string }
+  ): Promise<AckPacket | null> {
+    if (!this.crypto || !this.pairing) {
+      return null;
+    }
+    const sos = this.sosRepo.getPacket(sosId);
+    if (!sos) {
+      return null;
+    }
+
+    const auth = await this.crypto.createAuthenticatedAck(
+      sosId,
+      sos.deviceId,
+      this.pairing,
+      {
+        status,
+        note,
+        createdAt: options?.createdAt,
+        ackId: options?.ackId
+      }
+    );
+    if (!auth) {
+      return null;
+    }
+
+    const meshAck = toMeshAuthenticatedAck(auth, sos.senderId, this.localNodeId);
+    this.dedup.markSeen(meshAck.ackId);
+    this.sosRepo.saveAck(meshAck);
+
+    this.emitEvent({
+      type: 'ACK_RECEIVED',
+      nodeId: this.localNodeId,
+      packetId: meshAck.ackId,
+      message: `[AUTH ACK GENERATED] SOS ${meshAck.sosId} set to ${meshAck.status} by ${this.localNodeId}`,
+      timestamp: Date.now()
+    });
+
+    this.onAckReceivedListeners.forEach(cb => cb(meshAck));
+
+    const sent = await this.attemptForwardingAck(meshAck);
+    if (!sent) {
+      this.pendingAcks.push(meshAck);
+    }
+
+    return meshAck;
   }
 
 }

@@ -20,6 +20,8 @@ import { SosRepository, sosRepository } from '../repositories/sosRepository';
 import { DeduplicationService } from './deduplicationService';
 import { storageService } from './storageService';
 import { meshEngine } from './meshEngine';
+import { CryptoService, cryptoService, PairingService } from './cryptoService';
+import { isAuthenticatedMeshAck } from '../models/Packet';
 
 /**
  * DemoMeshNetwork — application-runtime wiring for the unified architecture:
@@ -96,6 +98,7 @@ class DemoMeshNetwork {
   private readonly hqRepo: SosRepository;
 
   private progressListeners: ProgressCallback[] = [];
+  private authInit: Promise<boolean> | null = null;
 
   /**
    * Latest real BLE connected-peer snapshot (stable native IDs, verbatim).
@@ -187,7 +190,40 @@ class DemoMeshNetwork {
     status: 'ACKNOWLEDGED' | 'RESPONDING' | 'RESCUED' = 'ACKNOWLEDGED',
     note?: string
   ): Promise<AckPacket | null> {
-    return this.hqEngine.acknowledgeSos(sosId, status, note);
+    const ready = await this.ensureAuthenticatedAckContext();
+    if (!ready) return null;
+    const ack = await this.hqEngine.acknowledgeSosAuthenticated(sosId, status, note);
+    if (!ack || !isAuthenticatedMeshAck(ack)) return null;
+    await this.resumeAll();
+    const verified = this.selfEngine.getLastAuthenticatedAckVerification();
+    if (!verified?.success || verified.ackId !== ack.ackId) return null;
+    return ack;
+  }
+
+  private async ensureAuthenticatedAckContext(): Promise<boolean> {
+    if (!this.authInit) {
+      this.authInit = (async () => {
+        try {
+          const identA = await cryptoService.loadOrCreateDeviceIdentity();
+          const ecdhA = await cryptoService.getEcdhPublicKey();
+          const hqCrypto = new CryptoService(undefined, 'demo_hq_crypto');
+          const identC = await hqCrypto.loadOrCreateDeviceIdentity();
+          const ecdhC = await hqCrypto.generateEcdhKeyPair();
+          const pairA = new PairingService('demo_pair_victim');
+          const pairC = new PairingService('demo_pair_hq');
+          pairA.addPendingPeer(pairA.generatePairingPayload(identC.deviceId, identC.publicKeyHex, ecdhC));
+          pairA.verifyPeer(identC.deviceId);
+          pairC.addPendingPeer(pairC.generatePairingPayload(identA.deviceId, identA.publicKeyHex, ecdhA));
+          pairC.verifyPeer(identA.deviceId);
+          this.selfEngine.setAuthenticatedAckContext(cryptoService, pairA);
+          this.hqEngine.setAuthenticatedAckContext(hqCrypto, pairC);
+          return true;
+        } catch {
+          return false;
+        }
+      })();
+    }
+    return this.authInit;
   }
 
   /**
