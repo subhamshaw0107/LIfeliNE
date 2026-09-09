@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
-import { type ViewMode } from './components/demo/DemoBar';
+export type ViewMode = 'phone' | 'desktop' | 'dual';
 import { MobileDeviceShell } from './components/common/MobileDeviceShell';
 import { DesktopRescueCommand } from './components/rescue/DesktopRescueCommand';
 
