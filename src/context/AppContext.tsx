@@ -209,15 +209,28 @@ async function getDeviceBatteryLevel(): Promise<number> {
 }
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Current user / role - defaults to PERSON-A
-  const [user, setUser] = useState<UserAccount | null>({
-    userId: 'PERSON-A',
-    name: 'PERSON-A',
-    phoneId: cryptoService.getOrCreateDeviceId(),
-    role: 'VICTIM',
-    emergencyContact: '+91 98765 43210'
+  // Current user / role - persisted in localStorage so logged-in users stay authenticated
+  const [user, setUser] = useState<UserAccount | null>(() => {
+    try {
+      const stored = localStorage.getItem('lifeline_authenticated_user');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error(e);
+    }
+    return null;
   });
-  const [role, setRole] = useState<UserRole>('VICTIM');
+  const [role, setRole] = useState<UserRole>(() => {
+    try {
+      const stored = localStorage.getItem('lifeline_authenticated_user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.role) return parsed.role;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return 'VICTIM';
+  });
 
   // Local identity: REAL BLE mode uses the native persisted stable UUID
   // (SharedPreferences via BleMeshTransport — same ID across disconnects
@@ -370,10 +383,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const login = (account: UserAccount) => {
     setUser(account);
     setRole(account.role);
+    try {
+      localStorage.setItem('lifeline_authenticated_user', JSON.stringify(account));
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const logout = () => {
     setUser(null);
+    try {
+      localStorage.removeItem('lifeline_authenticated_user');
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const updateLocation = (coords: Partial<LocationCoords>) => {
