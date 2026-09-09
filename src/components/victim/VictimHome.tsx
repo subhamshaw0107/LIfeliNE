@@ -387,13 +387,13 @@ export const VictimHome: React.FC<Props> = ({
           }}
         >
           {sosSentCount === 0 && (
-            <span>⚡ 2 times is maximum • You done 0 times (2 are remaining)</span>
+            <span>⚡ 2 times is maximum • You done 0 times (2 are remain)</span>
           )}
           {sosSentCount === 1 && (
-            <span>⚠️ 2 times is maximum • You done 1 time (1 is remaining)</span>
+            <span>⚠️ 2 times is maximum • You done 1 time (1 is remain)</span>
           )}
           {sosSentCount >= 2 && (
-            <span>⛔ 2 times is maximum • You done 2 times (0 remaining)</span>
+            <span>⛔ 2 times is maximum • You done 2 times (0 remain)</span>
           )}
         </div>
 
