@@ -3,14 +3,13 @@ import { useApp } from '../../context/AppContext';
 import { cryptoService } from '../../services/cryptoService';
 import { RegistrationScreen } from './RegistrationScreen';
 import { ForgotPasswordModal } from './ForgotPasswordModal';
-import { Mail, Lock, Eye, EyeOff, Radio, Shield, BadgeCheck, Users, ShieldAlert } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Radio, Shield, BadgeCheck, Users, ShieldAlert, AlertTriangle } from 'lucide-react';
 import { UserAccount, UserRole } from '../../types';
 
 type AuthView = 'LOGIN' | 'REGISTER' | 'FORGOT_PASSWORD';
 type LoginType = 'PEOPLE' | 'OFFICIAL';
 
 // Authorized Official Registry (Simulated backend-verified official database)
-// In production, this authentication is validated by the server authority.
 interface AuthorizedOfficial {
   officialId: string;
   email: string;
@@ -45,20 +44,30 @@ export const LoginScreen: React.FC = () => {
   // Shared status
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Email format validator
+  const isValidEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  };
+
   // ===================== PEOPLE LOGIN HANDLER =====================
   const handlePeopleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
-    if (!peopleEmail.trim() || !peoplePassword.trim()) {
-      setErrorMessage('Please enter both your Email and Password.');
+    const cleanEmail = peopleEmail.trim();
+
+    if (!cleanEmail || !isValidEmail(cleanEmail)) {
+      setErrorMessage('Please enter a valid email address.');
       return;
     }
 
-    // Security check: People users ALWAYS get VICTIM role.
-    // Frontend selection is not trusted to escalate privileges.
+    if (!peoplePassword.trim()) {
+      setErrorMessage('Please enter your password.');
+      return;
+    }
+
+    // Security check: People users ALWAYS authenticate with VICTIM role.
     const userRole: UserRole = 'VICTIM';
-    const cleanEmail = peopleEmail.trim();
 
     const account: UserAccount = {
       userId: cleanEmail,
@@ -79,13 +88,22 @@ export const LoginScreen: React.FC = () => {
     const normId = officialId.trim().toUpperCase();
     const normEmail = officialEmail.trim().toLowerCase();
 
-    if (!normId || !normEmail || !officialPassword.trim()) {
-      setErrorMessage('Official login requires Official ID, Email, and Password.');
+    if (!normId) {
+      setErrorMessage('Please enter your Official ID.');
+      return;
+    }
+
+    if (!normEmail || !isValidEmail(normEmail)) {
+      setErrorMessage('Please enter a valid email address.');
+      return;
+    }
+
+    if (!officialPassword.trim()) {
+      setErrorMessage('Please enter your password.');
       return;
     }
 
     // Security check: Verify against authorized emergency official database.
-    // People accounts cannot authenticate as Official.
     const match = AUTHORIZED_OFFICIALS.find(
       o => o.officialId.toUpperCase() === normId && o.email.toLowerCase() === normEmail
     );
@@ -111,15 +129,16 @@ export const LoginScreen: React.FC = () => {
     login(account);
   };
 
-  const handleGoogleLogin = () => {
-    const account: UserAccount = {
-      userId: 'google_emergency_user',
-      name: 'Google Verified Responder',
+  // ===================== EMERGENCY OFFLINE SOS ACCESS =====================
+  // Does not require login or credentials to trigger offline SOS
+  const handleEmergencySosAccess = () => {
+    login({
+      userId: 'PERSON-A',
+      name: 'Citizen (Emergency SOS)',
       phoneId: cryptoService.getOrCreateDeviceId(),
       role: 'VICTIM',
-      emergencyContact: '+91 98765 43210'
-    };
-    login(account);
+      emergencyContact: '+91 112 / 108'
+    });
   };
 
   // Fast Evaluator Demo Logins
@@ -226,28 +245,17 @@ export const LoginScreen: React.FC = () => {
       {/* Glassmorphism Login Card */}
       <div className="auth-card-wrapper">
         <div className="auth-glass-card">
-          <div style={{ textAlign: 'center', marginBottom: 16 }}>
-            <h2 style={{ fontSize: 21, fontWeight: 900, color: '#FFFFFF', letterSpacing: '1px', margin: '0 0 4px 0' }}>
-              WELCOME BACK
+          <div style={{ textAlign: 'center', marginBottom: 14 }}>
+            <h2 style={{ fontSize: 20, fontWeight: 900, color: '#FFFFFF', letterSpacing: '0.8px', margin: '0 0 4px 0' }}>
+              SIGN IN
             </h2>
-            <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>
-              Access your offline disaster mesh node
+            <p style={{ fontSize: 11, color: '#94A3B8', margin: 0 }}>
+              Connect to your local disaster mesh node
             </p>
           </div>
 
-          {/* 1. USER TYPE SELECTOR: LOGIN AS [ PEOPLE ] [ OFFICIAL ] */}
+          {/* TWO SECTIONS: [ 👤 PEOPLE ]    [ 🛡️ OFFICIAL ] */}
           <div style={{ marginBottom: 16 }}>
-            <div style={{
-              fontSize: 10,
-              fontWeight: 800,
-              letterSpacing: '1px',
-              color: '#94A3B8',
-              textAlign: 'center',
-              marginBottom: 8,
-              textTransform: 'uppercase'
-            }}>
-              LOGIN AS
-            </div>
             <div style={{
               display: 'grid',
               gridTemplateColumns: '1fr 1fr',
@@ -274,7 +282,7 @@ export const LoginScreen: React.FC = () => {
                 }}
               >
                 <Users size={14} />
-                <span>PEOPLE</span>
+                <span>👤 PEOPLE</span>
               </button>
               <button
                 type="button"
@@ -293,7 +301,7 @@ export const LoginScreen: React.FC = () => {
                 }}
               >
                 <ShieldAlert size={14} />
-                <span>OFFICIAL</span>
+                <span>🛡️ OFFICIAL</span>
               </button>
             </div>
           </div>
@@ -303,23 +311,28 @@ export const LoginScreen: React.FC = () => {
             <div
               style={{
                 background: 'rgba(239, 68, 68, 0.15)',
-                border: '1px solid rgba(239, 68, 68, 0.35)',
-                borderRadius: 8,
-                padding: '8px 12px',
+                border: '1.5px solid rgba(239, 68, 68, 0.5)',
+                borderRadius: 10,
+                padding: '9px 12px',
                 color: '#FCA5A5',
                 fontSize: 12,
-                fontWeight: 600,
-                marginBottom: 12
+                fontWeight: 700,
+                marginBottom: 14,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                animation: 'fadeIn 0.2s ease-out'
               }}
             >
-              ⚠️ {errorMessage}
+              <AlertTriangle size={15} color="#EF4444" style={{ flexShrink: 0 }} />
+              <span>{errorMessage}</span>
             </div>
           )}
 
-          {/* 2. PEOPLE LOGIN FORM */}
+          {/* ===================== 1. PEOPLE LOGIN SECTION ===================== */}
           {loginType === 'PEOPLE' && (
-            <form onSubmit={handlePeopleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {/* Email */}
+            <form onSubmit={handlePeopleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+              {/* Email Field */}
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 5, display: 'block' }}>
                   Email
@@ -327,17 +340,16 @@ export const LoginScreen: React.FC = () => {
                 <div className="auth-input-container">
                   <Mail size={15} color="#64748B" />
                   <input
-                    type="email"
+                    type="text"
                     value={peopleEmail}
                     onChange={e => setPeopleEmail(e.target.value)}
-                    placeholder="Enter Email"
+                    placeholder="Enter email address"
                     className="auth-text-input"
-                    required
                   />
                 </div>
               </div>
 
-              {/* Password */}
+              {/* Password Field */}
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 5, display: 'block' }}>
                   Password
@@ -348,9 +360,8 @@ export const LoginScreen: React.FC = () => {
                     type={showPeoplePassword ? 'text' : 'password'}
                     value={peoplePassword}
                     onChange={e => setPeoplePassword(e.target.value)}
-                    placeholder="Enter Password"
+                    placeholder="Enter password"
                     className="auth-text-input"
-                    required
                   />
                   <button
                     type="button"
@@ -364,74 +375,56 @@ export const LoginScreen: React.FC = () => {
               </div>
 
               {/* LOGIN Button */}
-              <button type="submit" className="auth-primary-btn">
+              <button type="submit" className="auth-primary-btn" style={{ marginTop: 4 }}>
                 LOGIN
               </button>
 
-              {/* Forgot Password Link */}
-              <div style={{ textAlign: 'center', marginTop: 2 }}>
-                <button
-                  type="button"
-                  onClick={() => setCurrentView('FORGOT_PASSWORD')}
-                  className="auth-link-text"
-                >
-                  Forgot Password?
-                </button>
-              </div>
-
-              {/* OR Divider */}
-              <div className="auth-divider">
-                <span className="auth-divider-line" />
-                <span className="auth-divider-text">OR</span>
-                <span className="auth-divider-line" />
-              </div>
-
-              {/* Continue with Google */}
-              <button
-                type="button"
-                onClick={handleGoogleLogin}
-                className="auth-google-btn"
-              >
-                <svg width="17" height="17" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.15C3.25 21.37 7.34 24 12 24z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.14-1.55.38-2.27V6.58H1.26C.46 8.16 0 9.98 0 12s.46 3.84 1.26 5.42l4.02-3.15z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.25 2.63 1.26 6.58l4.02 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-                  />
-                </svg>
-                <span>Continue with Google</span>
-              </button>
-
-              {/* Create Account Link */}
-              <div style={{ textAlign: 'center', marginTop: 10, fontSize: 12, color: '#94A3B8' }}>
-                Don't have an account?{' '}
+              {/* Action Buttons: CREATE ACCOUNT & FORGOT PASSWORD? */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 2, padding: '0 2px' }}>
                 <button
                   type="button"
                   onClick={() => setCurrentView('REGISTER')}
                   className="auth-link-text"
-                  style={{ fontWeight: 800, color: '#38BDF8' }}
+                  style={{ fontWeight: 800, color: '#38BDF8', fontSize: 12 }}
                 >
-                  Create Account
+                  CREATE ACCOUNT
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentView('FORGOT_PASSWORD')}
+                  className="auth-link-text"
+                  style={{ fontSize: 12, color: '#94A3B8' }}
+                >
+                  FORGOT PASSWORD?
                 </button>
               </div>
             </form>
           )}
 
-          {/* 3. OFFICIAL LOGIN FORM */}
+          {/* ===================== 2. OFFICIAL LOGIN SECTION ===================== */}
           {loginType === 'OFFICIAL' && (
-            <form onSubmit={handleOfficialLogin} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {/* Official ID */}
+            <form onSubmit={handleOfficialLogin} style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+              {/* Authorized Personnel Notice */}
+              <div
+                style={{
+                  background: 'rgba(2, 132, 199, 0.12)',
+                  border: '1px solid rgba(56, 189, 248, 0.35)',
+                  borderRadius: 10,
+                  padding: '8px 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  color: '#7DD3FC',
+                  fontSize: 12,
+                  fontWeight: 700
+                }}
+              >
+                <Shield size={15} color="#38BDF8" style={{ flexShrink: 0 }} />
+                <span>Authorized personnel only</span>
+              </div>
+
+              {/* Official ID Field */}
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 5, display: 'block' }}>
                   Official ID
@@ -442,32 +435,30 @@ export const LoginScreen: React.FC = () => {
                     type="text"
                     value={officialId}
                     onChange={e => setOfficialId(e.target.value)}
-                    placeholder="Enter Official ID"
+                    placeholder="e.g. OFF-9014 or NDRF-01"
                     className="auth-text-input"
-                    required
                   />
                 </div>
               </div>
 
-              {/* Email */}
+              {/* Official Email Field */}
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 5, display: 'block' }}>
-                  Email
+                  Official Email
                 </label>
                 <div className="auth-input-container">
                   <Mail size={15} color="#64748B" />
                   <input
-                    type="email"
+                    type="text"
                     value={officialEmail}
                     onChange={e => setOfficialEmail(e.target.value)}
-                    placeholder="Enter Official Email"
+                    placeholder="commander@lifeline.gov"
                     className="auth-text-input"
-                    required
                   />
                 </div>
               </div>
 
-              {/* Password */}
+              {/* Password Field */}
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 5, display: 'block' }}>
                   Password
@@ -478,9 +469,8 @@ export const LoginScreen: React.FC = () => {
                     type={showOfficialPassword ? 'text' : 'password'}
                     value={officialPassword}
                     onChange={e => setOfficialPassword(e.target.value)}
-                    placeholder="Enter Password"
+                    placeholder="Enter official password"
                     className="auth-text-input"
-                    required
                   />
                   <button
                     type="button"
@@ -498,6 +488,7 @@ export const LoginScreen: React.FC = () => {
                 type="submit" 
                 className="auth-primary-btn"
                 style={{
+                  marginTop: 4,
                   background: 'linear-gradient(135deg, #0284C7, #0369A1)',
                   boxShadow: '0 4px 18px rgba(2, 132, 199, 0.4)'
                 }}
@@ -505,40 +496,57 @@ export const LoginScreen: React.FC = () => {
                 OFFICIAL LOGIN
               </button>
 
-              {/* Forgot Password Link */}
+              {/* FORGOT PASSWORD? */}
               <div style={{ textAlign: 'center', marginTop: 2 }}>
                 <button
                   type="button"
                   onClick={() => setCurrentView('FORGOT_PASSWORD')}
                   className="auth-link-text"
+                  style={{ fontSize: 12 }}
                 >
-                  Forgot Password?
+                  FORGOT PASSWORD?
                 </button>
-              </div>
-
-              {/* Security Badge Info */}
-              <div style={{
-                background: 'rgba(2, 132, 199, 0.08)',
-                border: '1px solid rgba(2, 132, 199, 0.25)',
-                borderRadius: 10,
-                padding: '8px 10px',
-                fontSize: 11,
-                color: '#7DD3FC',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                marginTop: 4
-              }}>
-                <Shield size={14} color="#38BDF8" style={{ flexShrink: 0 }} />
-                <span>Authorized responders only. Access verified via Emergency Registry.</span>
               </div>
             </form>
           )}
 
-          {/* Quick Demo Logins for Testing */}
+          {/* ===================== EMERGENCY ACCESS BUTTON ===================== */}
+          {/* Preserves immediate SOS access without requiring login */}
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+            <button
+              type="button"
+              onClick={handleEmergencySosAccess}
+              style={{
+                width: '100%',
+                background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(185, 28, 28, 0.25) 100%)',
+                border: '1.5px solid rgba(239, 68, 68, 0.65)',
+                borderRadius: 12,
+                padding: '11px 14px',
+                color: '#FCA5A5',
+                fontSize: 12,
+                fontWeight: 900,
+                letterSpacing: '0.5px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                transition: 'all 0.2s ease',
+                boxShadow: '0 4px 15px rgba(239, 68, 68, 0.18)'
+              }}
+            >
+              <span>🚨</span>
+              <span>EMERGENCY OFFLINE SOS (NO LOGIN)</span>
+            </button>
+            <div style={{ fontSize: 10, color: '#64748B', textAlign: 'center', marginTop: 5 }}>
+              Immediate offline SOS transmission in critical danger
+            </div>
+          </div>
+
+          {/* Quick Demo Credentials for Reviewers */}
           <div className="auth-quick-demo-box">
             <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
-              ⚡ 1-Click Quick Demo Login
+              ⚡ 1-Click Demo Evaluation Login
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 6 }}>
               <button
