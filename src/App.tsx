@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
-import { DemoBar, ViewMode } from './components/demo/DemoBar';
+import { type ViewMode } from './components/demo/DemoBar';
 import { MobileDeviceShell } from './components/common/MobileDeviceShell';
 import { DesktopRescueCommand } from './components/rescue/DesktopRescueCommand';
 
@@ -36,13 +36,6 @@ const MainAppContent: React.FC = () => {
 
   return (
     <div className={`lifeline-viewport-container ${viewMode}`}>
-      {/* Top Action Bar for Laptop/Desktop */}
-      <DemoBar
-        viewMode={viewMode}
-        onSelectViewMode={isWideScreen ? handleSelectViewMode : undefined}
-        onReplaySplash={handleReplaySplash}
-      />
-
       {/* Main Content Area */}
       <main className="lifeline-main-content">
         {!user ? (

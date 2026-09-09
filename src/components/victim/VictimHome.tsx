@@ -48,6 +48,18 @@ export const VictimHome: React.FC<Props> = ({
   const [activationState, setActivationState] = useState<'IDLE' | 'COUNTDOWN' | 'TRIGGERED'>('IDLE');
   const [countdownNum, setCountdownNum] = useState(2);
 
+  const [sosSentCount, setSosSentCount] = useState<number>(() => {
+    const saved = localStorage.getItem('lifeline_sos_sent_count');
+    return saved ? parseInt(saved, 10) : 0;
+  });
+
+  useEffect(() => {
+    if (victimActiveSos && sosSentCount === 0) {
+      setSosSentCount(1);
+      localStorage.setItem('lifeline_sos_sent_count', '1');
+    }
+  }, [victimActiveSos, sosSentCount]);
+
   const holdTimerRef = useRef<NodeJS.Timeout | null>(null);
   const holdStartRef = useRef<number>(0);
   const animationFrameRef = useRef<number | null>(null);
@@ -83,8 +95,18 @@ export const VictimHome: React.FC<Props> = ({
   // SOS activation trigger
   const triggerSosActivation = async () => {
     if (isSending) return;
+    if (sosSentCount >= 2) {
+      setTapHint('Maximum 2 SOS broadcasts reached (0 remaining).');
+      setTimeout(() => setTapHint(null), 3000);
+      return;
+    }
+
     setIsSending(true);
     setActivationState('TRIGGERED');
+
+    const nextCount = Math.min(2, sosSentCount + 1);
+    setSosSentCount(nextCount);
+    localStorage.setItem('lifeline_sos_sent_count', nextCount.toString());
 
     // Haptic buzz on mobile devices if supported
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
@@ -105,15 +127,17 @@ export const VictimHome: React.FC<Props> = ({
     }
   };
 
-  // Press-and-hold handlers for SOS button (2 seconds required)
+  // Press-and-hold handlers for SOS button (1 second required)
   const startHold = (e: React.MouseEvent | React.TouchEvent) => {
-    // Prevent default touch gestures to ensure smooth holding
-    if (e.type === 'touchstart') {
-      // Allow touch to register without scrolling the button
+    if (victimActiveSos && sosSentCount >= 2) {
+      setTapHint('Maximum 2 SOS limit reached (0 remaining). Emergency beacon active.');
+      setTimeout(() => setTapHint(null), 3000);
+      return;
     }
 
-    if (victimActiveSos) {
-      // Already active - immediate inspection or status feedback
+    if (sosSentCount >= 2) {
+      setTapHint('Maximum 2 SOS broadcasts reached (0 remaining).');
+      setTimeout(() => setTapHint(null), 3000);
       return;
     }
 
@@ -129,13 +153,13 @@ export const VictimHome: React.FC<Props> = ({
 
     const updateLoop = () => {
       const elapsed = Date.now() - holdStartRef.current;
-      const progress = Math.min(100, (elapsed / 2000) * 100);
+      const progress = Math.min(100, (elapsed / 1000) * 100);
       setHoldProgress(progress);
 
       if (progress < 100) {
         animationFrameRef.current = requestAnimationFrame(updateLoop);
       } else {
-        // 2 seconds complete! Trigger SOS
+        // 1 second complete! Trigger SOS
         triggerSosActivation();
       }
     };
@@ -156,9 +180,9 @@ export const VictimHome: React.FC<Props> = ({
     setHoldProgress(0);
 
     // If released prematurely, give friendly coaching
-    if (elapsed > 80 && elapsed < 1800 && !victimActiveSos) {
-      setTapHint('Press and hold for 2 full seconds to trigger emergency SOS');
-      setTimeout(() => setTapHint(null), 3500);
+    if (elapsed > 80 && elapsed < 900 && !victimActiveSos) {
+      setTapHint('Press and hold for 1 full second to trigger emergency SOS');
+      setTimeout(() => setTapHint(null), 3000);
     }
   };
 
@@ -301,8 +325,8 @@ export const VictimHome: React.FC<Props> = ({
             onTouchStart={startHold}
             onTouchEnd={cancelHold}
             onTouchCancel={cancelHold}
-            disabled={isSending}
-            aria-label="Press and hold for 2 seconds to activate SOS"
+            disabled={isSending || sosSentCount >= 2}
+            aria-label="Press and hold for 1 second to activate SOS"
           >
             <div className="sos-btn-content">
               <span className="sos-beacon-icon">🆘</span>
@@ -314,7 +338,7 @@ export const VictimHome: React.FC<Props> = ({
                   ? 'SOS BROADCASTING'
                   : isHolding
                   ? `${Math.round(holdProgress)}%`
-                  : 'HOLD 2 SECONDS'}
+                  : 'HOLD 1 SECOND'}
               </span>
             </div>
           </button>
@@ -325,8 +349,53 @@ export const VictimHome: React.FC<Props> = ({
             ? '🚨 Emergency Beacon Active — Nearby Relays Forwarding'
             : isHolding
             ? 'Keep holding to activate emergency beacon...'
-            : 'Press and hold for 2 seconds'}
+            : 'Press and hold for 1 second'}
         </p>
+
+        {/* Maximum 2 times SOS indicator */}
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+            padding: '5px 14px',
+            borderRadius: '16px',
+            fontSize: '11px',
+            fontWeight: 800,
+            letterSpacing: '0.3px',
+            background:
+              sosSentCount === 0
+                ? 'rgba(56, 189, 248, 0.12)'
+                : sosSentCount === 1
+                ? 'rgba(245, 158, 11, 0.16)'
+                : 'rgba(239, 68, 68, 0.16)',
+            border: `1px solid ${
+              sosSentCount === 0
+                ? 'rgba(56, 189, 248, 0.35)'
+                : sosSentCount === 1
+                ? 'rgba(245, 158, 11, 0.5)'
+                : 'rgba(239, 68, 68, 0.5)'
+            }`,
+            color:
+              sosSentCount === 0
+                ? '#38BDF8'
+                : sosSentCount === 1
+                ? '#FDE68A'
+                : '#FCA5A5',
+            marginTop: '4px'
+          }}
+        >
+          {sosSentCount === 0 && (
+            <span>⚡ 2 times is maximum • You done 0 times (2 are remaining)</span>
+          )}
+          {sosSentCount === 1 && (
+            <span>⚠️ 2 times is maximum • You done 1 time (1 is remaining)</span>
+          )}
+          {sosSentCount >= 2 && (
+            <span>⛔ 2 times is maximum • You done 2 times (0 remaining)</span>
+          )}
+        </div>
 
         {/* Cooldown or Tap Warning hint */}
         {tapHint && (
@@ -412,66 +481,6 @@ export const VictimHome: React.FC<Props> = ({
         </section>
       )}
 
-      {/* 4. QUICK ACTIONS (Clean, large cards) */}
-      <section className="quick-actions-section" aria-label="Quick actions">
-        <div className="quick-actions-grid-clean">
-          <button
-            type="button"
-            className="quick-action-card"
-            onClick={onNavigateToMap}
-          >
-            <div className="action-icon-pill icon-purple">
-              <Map size={20} />
-            </div>
-            <div className="action-card-text">
-              <strong className="action-title">Find Shelter</strong>
-              <span className="action-desc">Offline safe zones & routes</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            className="quick-action-card"
-            onClick={onNavigateToMessages}
-          >
-            <div className="action-icon-pill icon-blue">
-              <MessageSquare size={20} />
-            </div>
-            <div className="action-card-text">
-              <strong className="action-title">Send Message</strong>
-              <span className="action-desc">Offline peer-to-peer chat</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            className="quick-action-card"
-            onClick={onNavigateToMesh}
-          >
-            <div className="action-icon-pill icon-green">
-              <Radio size={20} />
-            </div>
-            <div className="action-card-text">
-              <strong className="action-title">Mesh Network</strong>
-              <span className="action-desc">Relay nodes & topology</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            className="quick-action-card"
-            onClick={onNavigateToMap}
-          >
-            <div className="action-icon-pill icon-amber">
-              <Compass size={20} />
-            </div>
-            <div className="action-card-text">
-              <strong className="action-title">My Location</strong>
-              <span className="action-desc">GPS radar & terrain</span>
-            </div>
-          </button>
-        </div>
-      </section>
 
       {/* 6. SAFE SHELTER (Nearest safe evacuation point) */}
       {nearestShelter && (
