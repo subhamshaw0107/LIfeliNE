@@ -1,18 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
-import { HardwareStatusStrip } from '../common/HardwareStatusStrip';
-import { SosTrackerCard } from '../common/SosTrackerCard';
-import { geoService } from '../../services/geoService';
-import { rateLimiter } from '../../services/rateLimiter';
+import { geoService, SAFE_SHELTERS, haversineDistanceKm } from '../../services/geoService';
 import {
   AlertTriangle,
   Radio,
   MapPin,
-  MessageSquare,
   Map,
   ShieldCheck,
   CheckCircle2,
-  Lock
+  Clock,
+  Home,
+  MessageSquare,
+  Compass,
+  AlertOctagon,
+  ChevronRight,
+  Ambulance,
+  Info
 } from 'lucide-react';
 
 interface Props {
@@ -31,8 +34,6 @@ export const VictimHome: React.FC<Props> = ({
   const {
     location,
     updateLocation,
-    meshStatus,
-    simpleNetworkStatus,
     disasterZones,
     rateLimitState,
     victimActiveSos,
@@ -41,26 +42,128 @@ export const VictimHome: React.FC<Props> = ({
   } = useApp();
 
   const [isSending, setIsSending] = useState(false);
-  const [showDangerDetails, setShowDangerDetails] = useState(false);
+  const [holdProgress, setHoldProgress] = useState(0); // 0 to 100%
+  const [isHolding, setIsHolding] = useState(false);
+  const [tapHint, setTapHint] = useState<string | null>(null);
+  const [activationState, setActivationState] = useState<'IDLE' | 'COUNTDOWN' | 'TRIGGERED'>('IDLE');
+  const [countdownNum, setCountdownNum] = useState(2);
 
-  // Compute live proximity to disaster
-  const riskEval = geoService.evaluateDisasterRisk(
-    location.latitude,
-    location.longitude,
-    disasterZones
-  );
+  const holdTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const holdStartRef = useRef<number>(0);
+  const animationFrameRef = useRef<number | null>(null);
 
-  const handleSosClick = async () => {
+  // Compute live proximity to disaster zones
+  const riskEval = useMemo(() => {
+    return geoService.evaluateDisasterRisk(
+      location.latitude,
+      location.longitude,
+      disasterZones
+    );
+  }, [location.latitude, location.longitude, disasterZones]);
+
+  // Find nearest safe shelter
+  const nearestShelter = useMemo(() => {
+    if (!SAFE_SHELTERS || SAFE_SHELTERS.length === 0) return null;
+    const sheltersWithDist = SAFE_SHELTERS.map((s) => ({
+      ...s,
+      distKm: haversineDistanceKm(location.latitude, location.longitude, s.latitude, s.longitude)
+    }));
+    sheltersWithDist.sort((a, b) => a.distKm - b.distKm);
+    return sheltersWithDist[0];
+  }, [location.latitude, location.longitude]);
+
+  // Clean up timers on unmount
+  useEffect(() => {
+    return () => {
+      if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    };
+  }, []);
+
+  // SOS activation trigger
+  const triggerSosActivation = async () => {
     if (isSending) return;
     setIsSending(true);
+    setActivationState('TRIGGERED');
+
+    // Haptic buzz on mobile devices if supported
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([150, 80, 250]);
+      } catch {
+        // ignore if not supported
+      }
+    }
+
     try {
       await sendSos();
     } finally {
       setIsSending(false);
+      setHoldProgress(0);
+      setIsHolding(false);
+      setActivationState('IDLE');
     }
   };
 
-  const handleSafeClick = async () => {
+  // Press-and-hold handlers for SOS button (2 seconds required)
+  const startHold = (e: React.MouseEvent | React.TouchEvent) => {
+    // Prevent default touch gestures to ensure smooth holding
+    if (e.type === 'touchstart') {
+      // Allow touch to register without scrolling the button
+    }
+
+    if (victimActiveSos) {
+      // Already active - immediate inspection or status feedback
+      return;
+    }
+
+    if (!rateLimitState.canSend) {
+      setTapHint('SOS rate limit active. Please wait for cooldown.');
+      setTimeout(() => setTapHint(null), 3000);
+      return;
+    }
+
+    setIsHolding(true);
+    setTapHint(null);
+    holdStartRef.current = Date.now();
+
+    const updateLoop = () => {
+      const elapsed = Date.now() - holdStartRef.current;
+      const progress = Math.min(100, (elapsed / 2000) * 100);
+      setHoldProgress(progress);
+
+      if (progress < 100) {
+        animationFrameRef.current = requestAnimationFrame(updateLoop);
+      } else {
+        // 2 seconds complete! Trigger SOS
+        triggerSosActivation();
+      }
+    };
+
+    animationFrameRef.current = requestAnimationFrame(updateLoop);
+  };
+
+  const cancelHold = () => {
+    if (!isHolding) return;
+    setIsHolding(false);
+
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    const elapsed = Date.now() - holdStartRef.current;
+    setHoldProgress(0);
+
+    // If released prematurely, give friendly coaching
+    if (elapsed > 80 && elapsed < 1800 && !victimActiveSos) {
+      setTapHint('Press and hold for 2 full seconds to trigger emergency SOS');
+      setTimeout(() => setTapHint(null), 3500);
+    }
+  };
+
+  // Safe Broadcast Action
+  const handleMarkSafe = async () => {
     if (isSending) return;
     setIsSending(true);
     try {
@@ -70,347 +173,346 @@ export const VictimHome: React.FC<Props> = ({
     }
   };
 
+  // Delivery status flags for the active SOS card
+  const hasRelayConnected = useMemo(() => {
+    if (!victimActiveSos) return false;
+    return (
+      victimActiveSos.hopCount > 0 ||
+      (victimActiveSos.route && victimActiveSos.route.length > 1) ||
+      ['RELAYING', 'DELIVERED', 'ACKNOWLEDGED', 'RESPONDING', 'RESCUED'].includes(
+        victimActiveSos.status
+      )
+    );
+  }, [victimActiveSos]);
+
+  const isRescueNotified = useMemo(() => {
+    if (!victimActiveSos) return false;
+    return ['DELIVERED', 'ACKNOWLEDGED', 'RESPONDING', 'RESCUED'].includes(victimActiveSos.status);
+  }, [victimActiveSos]);
+
+  const isResponderAssigned = useMemo(() => {
+    if (!victimActiveSos) return false;
+    return ['RESPONDING', 'RESCUED'].includes(victimActiveSos.status);
+  }, [victimActiveSos]);
+
   return (
-    <div className="victim-home-container">
-      {/* App Branding */}
-      <div className="app-header-simple">
-        <h1 className="app-header-title">LIFELINE</h1>
-        <span className="app-header-subtitle">Offline Disaster Rescue Network</span>
-      </div>
+    <div className="victim-home-clean">
+      {/* 1. TOP HEADER */}
+      <header className="victim-top-header">
+        <div className="victim-header-title-wrap">
+          <h1 className="victim-app-title">LIFELINE</h1>
+          <p className="victim-app-tagline">Offline Disaster Rescue Network</p>
+        </div>
+        <div className="victim-ready-badge" title="Bluetooth & Wi-Fi Direct Mesh is Active">
+          <span className="ready-pulsing-dot" />
+          <span className="ready-text">Offline • Rescue Network Ready</span>
+        </div>
+      </header>
 
-      {/* Hardware Status Strip */}
-      <HardwareStatusStrip />
-
-      {/* Simple Clean Network Status Card */}
-      <div 
-        onClick={onNavigateToMesh}
-        style={{
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border-card-highlight)',
-          borderRadius: 14,
-          padding: '12px 14px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 6,
-          cursor: 'pointer',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.3)'
-        }}
-        title="Tap to open Mesh Network Topology Portal"
+      {/* 2. SAFETY STATUS CARD */}
+      <section
+        className={`safety-status-card safety-${riskEval.riskLevel.toLowerCase()}`}
+        aria-label="Safety status"
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: '#94A3B8', letterSpacing: 1 }}>
-            📡 NETWORK STATUS
-          </span>
-          <span style={{
-            fontSize: 10,
-            fontWeight: 800,
-            color: '#38BDF8',
-            background: 'rgba(56, 189, 248, 0.12)',
-            padding: '2px 8px',
-            borderRadius: 6,
-            border: '1px solid rgba(56, 189, 248, 0.3)'
-          }}>
-            Topology 📡 →
-          </span>
-        </div>
-
-        <div style={{ fontSize: 15, fontWeight: 900 }}>
-          {simpleNetworkStatus === 'CONNECTED' && (
-            <span style={{ color: '#10B981' }}>🟢 CONNECTED</span>
-          )}
-          {simpleNetworkStatus === 'SEARCHING' && (
-            <span style={{ color: '#F59E0B' }}>🟡 SEARCHING FOR NEARBY DEVICE...</span>
-          )}
-          {simpleNetworkStatus === 'WAITING_RELAY' && (
-            <span style={{ color: '#F59E0B' }}>⏳ WAITING FOR RELAY...</span>
-          )}
-          {simpleNetworkStatus === 'FORWARDED' && (
-            <span style={{ color: '#10B981' }}>🟢 SOS FORWARDED</span>
-          )}
-          {simpleNetworkStatus === 'DELIVERED' && (
-            <span style={{ color: '#38BDF8' }}>✓ RESCUE CENTER REACHED</span>
-          )}
-        </div>
-      </div>
-
-      {/* Location & Hazard Overview */}
-      <div className="telemetry-card-simple">
-        {/* Location Display */}
-        <div className="telemetry-row">
-          <div className="telemetry-label">
-            <MapPin size={15} color="#38BDF8" />
-            <span>📍 LOCATION</span>
+        <div className="safety-card-left">
+          <div className="safety-icon-wrapper">
+            {riskEval.riskLevel === 'CRITICAL' && <AlertTriangle size={24} className="hazard-pulse" />}
+            {riskEval.riskLevel === 'WARNING' && <AlertTriangle size={24} />}
+            {riskEval.riskLevel === 'SAFE' && <ShieldCheck size={24} />}
           </div>
-          <div className="telemetry-value">
-            {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
+          <div className="safety-text-content">
+            <h2 className="safety-headline">
+              {riskEval.riskLevel === 'CRITICAL' && 'YOU ARE IN DANGER'}
+              {riskEval.riskLevel === 'WARNING' && 'WARNING: NEAR HAZARD'}
+              {riskEval.riskLevel === 'SAFE' && 'YOU ARE SAFE'}
+            </h2>
+            <p className="safety-subheadline">
+              {riskEval.riskLevel === 'CRITICAL' &&
+                (riskEval.distanceKm <= 0.1
+                  ? `${riskEval.closestZone.name} • Inside Hazard Zone`
+                  : `${riskEval.closestZone.name} • ${riskEval.distanceKm} km away`)}
+              {riskEval.riskLevel === 'WARNING' &&
+                `Near ${riskEval.closestZone.name} • ${riskEval.distanceKm} km away`}
+              {riskEval.riskLevel === 'SAFE' && 'Green Zone • Safe Area'}
+            </p>
           </div>
         </div>
 
-        {/* Proximity Risk Level: RED, YELLOW, GREEN */}
-        <div className="telemetry-row" style={{
-          background: riskEval.riskLevel === 'CRITICAL'
-            ? 'rgba(239,68,68,0.18)'
-            : riskEval.riskLevel === 'WARNING'
-            ? 'rgba(245,158,11,0.18)'
-            : 'rgba(16,185,129,0.18)',
-          padding: '8px 10px',
-          borderRadius: 8,
-          border: `1px solid ${
-            riskEval.riskLevel === 'CRITICAL'
-              ? 'rgba(239,68,68,0.4)'
-              : riskEval.riskLevel === 'WARNING'
-              ? 'rgba(245,158,11,0.4)'
-              : 'rgba(16,185,129,0.4)'
-          }`
-        }}>
-          <div className="telemetry-label" style={{
-            color: riskEval.riskLevel === 'CRITICAL'
-              ? '#EF4444'
-              : riskEval.riskLevel === 'WARNING'
-              ? '#F59E0B'
-              : '#10B981',
-            fontWeight: 700
-          }}>
-            <AlertTriangle size={15} />
-            <span>
-              {riskEval.riskLevel === 'CRITICAL' && '🔴 RED ZONE'}
-              {riskEval.riskLevel === 'WARNING' && '🟡 YELLOW ZONE'}
-              {riskEval.riskLevel === 'SAFE' && '🟢 GREEN ZONE'}
-            </span>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{
-              fontSize: 10,
-              fontWeight: 800,
-              color: riskEval.riskLevel === 'CRITICAL'
-                ? '#FCA5A5'
-                : riskEval.riskLevel === 'WARNING'
-                ? '#FDE68A'
-                : '#A7F3D0'
-            }}>
-              AUTO PRIORITY: {riskEval.riskLevel === 'CRITICAL' ? 'CRITICAL' : riskEval.riskLevel === 'WARNING' ? 'HIGH' : 'LOW'}
+        {/* Discreet zone simulator for hackathon testing & demonstrations */}
+        <div className="safety-zone-simulator" title="Simulate different disaster zones for testing">
+          <span className="sim-label">Simulate:</span>
+          <button
+            type="button"
+            className={`sim-pill red ${riskEval.riskLevel === 'CRITICAL' ? 'active' : ''}`}
+            onClick={() => updateLocation({ latitude: 22.978, longitude: 88.438 })}
+          >
+            🔴 Red
+          </button>
+          <button
+            type="button"
+            className={`sim-pill yellow ${riskEval.riskLevel === 'WARNING' ? 'active' : ''}`}
+            onClick={() => updateLocation({ latitude: 22.966, longitude: 88.432 })}
+          >
+            🟡 Yellow
+          </button>
+          <button
+            type="button"
+            className={`sim-pill green ${riskEval.riskLevel === 'SAFE' ? 'active' : ''}`}
+            onClick={() => updateLocation({ latitude: 22.945, longitude: 88.4 })}
+          >
+            🟢 Green
+          </button>
+        </div>
+      </section>
+
+      {/* 3. PRIMARY SOS ACTION (Large circular button with 2-second press-and-hold) */}
+      <section className="primary-sos-section" aria-label="Emergency SOS activation">
+        <div className="sos-button-wrapper">
+          {/* Circular SVG Progress Ring for the 2-second hold */}
+          <svg className="sos-progress-svg" viewBox="0 0 220 220">
+            {/* Background track */}
+            <circle
+              cx="110"
+              cy="110"
+              r="100"
+              className="sos-track-circle"
+            />
+            {/* Active filling progress ring */}
+            <circle
+              cx="110"
+              cy="110"
+              r="100"
+              className="sos-fill-circle"
+              style={{
+                strokeDasharray: 628,
+                strokeDashoffset: 628 - (628 * holdProgress) / 100
+              }}
+            />
+          </svg>
+
+          <button
+            type="button"
+            className={`primary-sos-btn ${victimActiveSos ? 'sos-is-active' : ''} ${
+              isHolding ? 'holding' : ''
+            }`}
+            onMouseDown={startHold}
+            onMouseUp={cancelHold}
+            onMouseLeave={cancelHold}
+            onTouchStart={startHold}
+            onTouchEnd={cancelHold}
+            onTouchCancel={cancelHold}
+            disabled={isSending}
+            aria-label="Press and hold for 2 seconds to activate SOS"
+          >
+            <div className="sos-btn-content">
+              <span className="sos-beacon-icon">🆘</span>
+              <span className="sos-label-text">SOS</span>
+              <span className="sos-sub-instruction">
+                {isSending
+                  ? 'BROADCASTING...'
+                  : victimActiveSos
+                  ? 'SOS BROADCASTING'
+                  : isHolding
+                  ? `${Math.round(holdProgress)}%`
+                  : 'HOLD 2 SECONDS'}
+              </span>
             </div>
-            <div style={{ fontSize: 10, color: '#94A3B8' }}>
-              {riskEval.distanceKm} km from {riskEval.closestZone.type}
-            </div>
+          </button>
+        </div>
+
+        <p className="sos-hold-helper-text">
+          {victimActiveSos
+            ? '🚨 Emergency Beacon Active — Nearby Relays Forwarding'
+            : isHolding
+            ? 'Keep holding to activate emergency beacon...'
+            : 'Press and hold for 2 seconds'}
+        </p>
+
+        {/* Cooldown or Tap Warning hint */}
+        {tapHint && (
+          <div className="sos-tap-hint" role="alert">
+            <Info size={14} />
+            <span>{tapHint}</span>
           </div>
-        </div>
-
-        {/* Quick GPS Zone Simulator (Simulate being in RED, YELLOW, or GREEN zone) */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 6,
-          marginTop: 2,
-          padding: '4px 6px',
-          background: 'rgba(255,255,255,0.03)',
-          borderRadius: 6,
-          fontSize: 10
-        }}>
-          <span style={{ color: '#64748B', fontWeight: 600 }}>Simulate Zone:</span>
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button
-              onClick={() => updateLocation({ latitude: 22.9780, longitude: 88.4380 })}
-              style={{
-                background: riskEval.riskLevel === 'CRITICAL' ? 'rgba(239,68,68,0.35)' : 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(239,68,68,0.4)',
-                color: '#EF4444',
-                padding: '2px 6px',
-                borderRadius: 4,
-                fontSize: 10,
-                fontWeight: 700,
-                cursor: 'pointer'
-              }}
-              title="Move victim to RED / CRITICAL Zone (Flood breach)"
-            >
-              🔴 RED
-            </button>
-            <button
-              onClick={() => updateLocation({ latitude: 22.9660, longitude: 88.4320 })}
-              style={{
-                background: riskEval.riskLevel === 'WARNING' ? 'rgba(245,158,11,0.35)' : 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(245,158,11,0.4)',
-                color: '#F59E0B',
-                padding: '2px 6px',
-                borderRadius: 4,
-                fontSize: 10,
-                fontWeight: 700,
-                cursor: 'pointer'
-              }}
-              title="Move victim to YELLOW / WARNING Zone (Perimeter)"
-            >
-              🟡 YELLOW
-            </button>
-            <button
-              onClick={() => updateLocation({ latitude: 22.9450, longitude: 88.4000 })}
-              style={{
-                background: riskEval.riskLevel === 'SAFE' ? 'rgba(16,185,129,0.35)' : 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(16,185,129,0.4)',
-                color: '#10B981',
-                padding: '2px 6px',
-                borderRadius: 4,
-                fontSize: 10,
-                fontWeight: 700,
-                cursor: 'pointer'
-              }}
-              title="Move victim to GREEN / SAFE Zone (Outside danger area)"
-            >
-              🟢 GREEN
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* GIANT SOS BUTTON (Zero-questionnaire, instant trigger) */}
-      <div className="sos-button-section">
-        <button
-          className={`giant-sos-btn ${victimActiveSos ? 'pulsing' : ''}`}
-          onClick={handleSosClick}
-          disabled={isSending || !rateLimitState.canSend}
-          title="Press for immediate emergency rescue"
-        >
-          <div style={{ fontSize: 26, lineHeight: 1 }}>🚨</div>
-          <span className="sos-text-main">SOS</span>
-          <span className="sos-text-sub">
-            {isSending ? 'ENCRYPTING...' : 'SEND SOS'}
-          </span>
-        </button>
-      </div>
-
-      {/* SOS Rate Limit Indicator */}
-      <div className="sos-limit-strip">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Lock size={13} color="#94A3B8" />
-          <span style={{ color: '#94A3B8', fontWeight: 600 }}>SOS AVAILABLE:</span>
-          <span className={`limit-badge-count ${!rateLimitState.canSend ? 'exhausted' : ''}`}>
-            {rateLimitState.maxAllowed - rateLimitState.countInWindow} / {rateLimitState.maxAllowed}
-          </span>
-        </div>
-
-        {!rateLimitState.canSend ? (
-          <span style={{ color: '#EF4444', fontWeight: 700, fontSize: 11 }}>
-            Resets in {rateLimiter.formatRemainingTime(rateLimitState.cooldownRemainingSeconds)}
-          </span>
-        ) : (
-          <span style={{ color: '#10B981', fontSize: 11, fontWeight: 600 }}>
-            1-Hour Window Active
-          </span>
         )}
-      </div>
+      </section>
 
-      {/* If Rate Limit reached, show banner */}
-      {!rateLimitState.canSend && (
-        <div style={{
-          background: 'rgba(239,68,68,0.15)',
-          border: '1px solid rgba(239,68,68,0.4)',
-          borderRadius: 12,
-          padding: '10px',
-          fontSize: 12,
-          color: '#FECACA',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 4
-        }}>
-          <div style={{ fontWeight: 800, color: '#EF4444' }}>⚠️ SOS LIMIT REACHED</div>
-          <div>You have used 2 SOS requests in the current 1-hour period. Please wait until the limit resets.</div>
-          <div style={{ fontSize: 11, opacity: 0.85 }}>You can still receive incoming alerts and chat messages.</div>
-        </div>
-      )}
-
-      {/* Active SOS Tracker if one exists */}
+      {/* 5. RESCUE STATUS (Prominent when an SOS is active) */}
       {victimActiveSos && (
-        <SosTrackerCard
-          packet={victimActiveSos}
-          onInspect={onInspectPacket ? () => onInspectPacket(victimActiveSos.id) : undefined}
-        />
-      )}
-
-      {/* Quick Actions Grid */}
-      <div className="quick-actions-grid">
-        <button 
-          className="action-card-btn" 
-          onClick={onNavigateToMesh}
-          style={{ borderColor: 'rgba(56, 189, 248, 0.4)', background: 'rgba(56, 189, 248, 0.08)' }}
-        >
-          <Radio size={18} color="#38BDF8" />
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontWeight: 700, fontSize: 13, color: '#FFF' }}>Mesh Portal</div>
-            <div style={{ fontSize: 10, color: '#38BDF8' }}>A → B → C → D Relay</div>
+        <section className="rescue-status-card" aria-label="Rescue delivery status">
+          <div className="rescue-status-header">
+            <div className="rescue-status-title-group">
+              <span className="rescue-pulse-dot" />
+              <h3 className="rescue-status-title">🚨 SOS ACTIVE</h3>
+            </div>
+            <span className="rescue-sos-id">ID: {victimActiveSos.id}</span>
           </div>
-        </button>
 
-        <button className="action-card-btn" onClick={onNavigateToMessages}>
-          <MessageSquare size={18} color="#38BDF8" />
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontWeight: 700, fontSize: 13 }}>Send Message</div>
-            <div style={{ fontSize: 10, color: '#94A3B8' }}>1-Tap Presets</div>
-          </div>
-        </button>
+          <div className="rescue-status-steps">
+            <div className="status-step-item completed">
+              <CheckCircle2 size={16} className="step-check-icon" />
+              <span className="step-text">SOS Sent</span>
+            </div>
 
-        <button className="action-card-btn" onClick={onNavigateToMap}>
-          <Map size={18} color="#A78BFA" />
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontWeight: 700, fontSize: 13 }}>Live Map</div>
-            <div style={{ fontSize: 10, color: '#94A3B8' }}>Offline GPS</div>
-          </div>
-        </button>
+            <div className={`status-step-item ${hasRelayConnected ? 'completed' : 'waiting'}`}>
+              {hasRelayConnected ? (
+                <CheckCircle2 size={16} className="step-check-icon" />
+              ) : (
+                <Clock size={16} className="step-clock-icon" />
+              )}
+              <span className="step-text">
+                {hasRelayConnected ? 'Relay Connected' : 'Connecting to Relay...'}
+              </span>
+            </div>
 
-        <button className="action-card-btn safe-btn" onClick={handleSafeClick}>
-          <CheckCircle2 size={18} color="#10B981" />
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontWeight: 700, fontSize: 13, color: '#10B981' }}>I'm Safe</div>
-            <div style={{ fontSize: 10, color: '#A7F3D0' }}>Broadcast Status</div>
+            <div className={`status-step-item ${isRescueNotified ? 'completed' : 'waiting'}`}>
+              {isRescueNotified ? (
+                <CheckCircle2 size={16} className="step-check-icon" />
+              ) : (
+                <Clock size={16} className="step-clock-icon" />
+              )}
+              <span className="step-text">
+                {isRescueNotified ? 'Rescue Center Notified' : 'Reaching Rescue Center...'}
+              </span>
+            </div>
           </div>
-        </button>
-      </div>
 
-      {/* Expanded Danger Details */}
-      {showDangerDetails && (
-        <div style={{
-          background: 'rgba(245, 158, 11, 0.1)',
-          border: '1px solid rgba(245, 158, 11, 0.3)',
-          borderRadius: 14,
-          padding: '12px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 8,
-          fontSize: 12
-        }}>
-          <div style={{ fontWeight: 800, color: '#F59E0B', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <AlertTriangle size={15} />
-            <span>Active Hazard Zones</span>
-          </div>
-          {disasterZones.map((z, idx) => {
-            const dist = geoService.evaluateDisasterRisk(location.latitude, location.longitude, [z]);
-            return (
-              <div key={idx} style={{
-                background: 'rgba(0,0,0,0.3)',
-                padding: '8px',
-                borderRadius: 8,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}>
-                <div>
-                  <div style={{ fontWeight: 700, color: '#FFF' }}>{z.name}</div>
-                  <div style={{ fontSize: 10, color: '#94A3B8' }}>{z.description}</div>
-                </div>
-                <span style={{
-                  padding: '3px 8px',
-                  borderRadius: 6,
-                  fontWeight: 800,
-                  fontSize: 11,
-                  background: dist.riskLevel === 'CRITICAL' ? '#EF4444' : '#F59E0B',
-                  color: '#FFF'
-                }}>
-                  {dist.distanceKm} km
-                </span>
+          {/* Responder assignment banner */}
+          {isResponderAssigned && (
+            <div className="responder-assigned-banner">
+              <Ambulance size={18} className="responder-icon" />
+              <div>
+                <strong>Responder Assigned</strong>
+                <p>Rescue squad is en route to your GPS position.</p>
               </div>
-            );
-          })}
-        </div>
+            </div>
+          )}
+
+          <div className="rescue-card-actions">
+            <button
+              type="button"
+              className="mark-safe-btn"
+              onClick={handleMarkSafe}
+              disabled={isSending}
+            >
+              <ShieldCheck size={16} />
+              <span>I Am Safe Now</span>
+            </button>
+            {onInspectPacket && (
+              <button
+                type="button"
+                className="view-details-link"
+                onClick={() => onInspectPacket(victimActiveSos.id)}
+              >
+                <span>Technical Packet Details</span>
+                <ChevronRight size={14} />
+              </button>
+            )}
+          </div>
+        </section>
       )}
+
+      {/* 4. QUICK ACTIONS (Clean, large cards) */}
+      <section className="quick-actions-section" aria-label="Quick actions">
+        <div className="quick-actions-grid-clean">
+          <button
+            type="button"
+            className="quick-action-card"
+            onClick={onNavigateToMap}
+          >
+            <div className="action-icon-pill icon-purple">
+              <Map size={20} />
+            </div>
+            <div className="action-card-text">
+              <strong className="action-title">Find Shelter</strong>
+              <span className="action-desc">Offline safe zones & routes</span>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            className="quick-action-card"
+            onClick={onNavigateToMessages}
+          >
+            <div className="action-icon-pill icon-blue">
+              <MessageSquare size={20} />
+            </div>
+            <div className="action-card-text">
+              <strong className="action-title">Send Message</strong>
+              <span className="action-desc">Offline peer-to-peer chat</span>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            className="quick-action-card"
+            onClick={onNavigateToMesh}
+          >
+            <div className="action-icon-pill icon-green">
+              <Radio size={20} />
+            </div>
+            <div className="action-card-text">
+              <strong className="action-title">Mesh Network</strong>
+              <span className="action-desc">Relay nodes & topology</span>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            className="quick-action-card"
+            onClick={onNavigateToMap}
+          >
+            <div className="action-icon-pill icon-amber">
+              <Compass size={20} />
+            </div>
+            <div className="action-card-text">
+              <strong className="action-title">My Location</strong>
+              <span className="action-desc">GPS radar & terrain</span>
+            </div>
+          </button>
+        </div>
+      </section>
+
+      {/* 6. SAFE SHELTER (Nearest safe evacuation point) */}
+      {nearestShelter && (
+        <section className="nearest-shelter-card" aria-label="Nearest safe shelter">
+          <div className="shelter-card-top">
+            <div className="shelter-header-title">
+              <Home size={18} className="shelter-header-icon" />
+              <span>Nearest Safe Shelter</span>
+            </div>
+            <span className="shelter-distance-badge">{nearestShelter.distKm} km away</span>
+          </div>
+
+          <div className="shelter-card-content">
+            <h3 className="shelter-name">{nearestShelter.name}</h3>
+            <p className="shelter-status-text">{nearestShelter.status}</p>
+          </div>
+
+          <button
+            type="button"
+            className="shelter-route-btn"
+            onClick={onNavigateToMap}
+          >
+            <span>VIEW ROUTE ON MAP</span>
+            <ChevronRight size={16} />
+          </button>
+        </section>
+      )}
+
+      {/* 7. EMERGENCY INFORMATION (Compact guidelines) */}
+      <section className="emergency-tips-card" aria-label="Emergency survival tips">
+        <div className="tips-card-header">
+          <Info size={16} className="tips-info-icon" />
+          <h4 className="tips-title">Emergency Survival Tips</h4>
+        </div>
+        <ul className="tips-list">
+          <li>Move to higher ground immediately if in a flood hazard zone.</li>
+          <li>Stay clear of fallen power lines and damaged structures.</li>
+          <li>Conserve phone battery; LIFELINE broadcasts in low-power bursts.</li>
+          <li>Stay visible and signal responders with flashlights or whistles.</li>
+        </ul>
+      </section>
     </div>
   );
 };
