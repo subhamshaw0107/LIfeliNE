@@ -7,6 +7,8 @@ import { TacticalMap } from '../map/TacticalMap';
 import { RescueDashboard } from '../rescue/RescueDashboard';
 import { LoginScreen } from '../auth/LoginScreen';
 import { SplashScreen } from '../splash/SplashScreen';
+import { BluetoothWifiPermissionModal } from './BluetoothWifiPermissionModal';
+import { LanguageSelectionScreen } from './LanguageSelectionScreen';
 import { RedZoneEmergencyModal } from './RedZoneEmergencyModal';
 import {
   Home,
@@ -44,6 +46,12 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
   const [rescueTab, setRescueTab] = useState<RescueTab>('DASHBOARD');
   const [inspectedSosId, setInspectedSosId] = useState<string | null>(null);
   const [showSplash, setShowSplash] = useState<boolean>(true);
+  const [hasMeshPermissions, setHasMeshPermissions] = useState<boolean>(() => {
+    return localStorage.getItem('lifeline_mesh_permissions') === 'granted';
+  });
+  const [hasSelectedLanguage, setHasSelectedLanguage] = useState<boolean>(() => {
+    return !!localStorage.getItem('lifeline_user_lang');
+  });
 
   // Time state for status bar
   const [timeStr, setTimeStr] = useState(() => {
@@ -69,6 +77,16 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
     setShowSplash(false);
   }, []);
 
+  const handleGrantPermissions = React.useCallback(() => {
+    localStorage.setItem('lifeline_mesh_permissions', 'granted');
+    setHasMeshPermissions(true);
+  }, []);
+
+  const handleLanguageSelected = React.useCallback(() => {
+    setHasSelectedLanguage(true);
+  }, []);
+
+  // 1. SPLASH SCREEN
   if (showSplash) {
     return (
       <div className="smartphone-chassis">
@@ -85,6 +103,43 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
     );
   }
 
+  // 2. MANDATORY BLUETOOTH & WI-FI PERMISSION POPUP
+  if (!hasMeshPermissions) {
+    return (
+      <div className="smartphone-chassis">
+        <div className="phone-top-bar" style={{ zIndex: 10000 }}>
+          <span>{timeStr}</span>
+          <div className="phone-dynamic-island">
+            <div className="island-camera-lens"></div>
+            <div className="island-sensor"></div>
+          </div>
+          <span>5G • 90%</span>
+        </div>
+        <BluetoothWifiPermissionModal onGrantPermissions={handleGrantPermissions} />
+      </div>
+    );
+  }
+
+  // 3. LANGUAGE SELECTION SCREEN
+  if (!hasSelectedLanguage) {
+    return (
+      <div className="smartphone-chassis">
+        <div className="phone-top-bar">
+          <span>{timeStr}</span>
+          <div className="phone-dynamic-island">
+            <div className="island-camera-lens"></div>
+            <div className="island-sensor"></div>
+          </div>
+          <span>5G • 89%</span>
+        </div>
+        <div className="phone-screen-content" style={{ paddingBottom: 0 }}>
+          <LanguageSelectionScreen onLanguageSelected={handleLanguageSelected} />
+        </div>
+      </div>
+    );
+  }
+
+  // 4. LOGIN SCREEN (PEOPLE / OFFICIAL)
   if (!user) {
     return (
       <div className="smartphone-chassis">
