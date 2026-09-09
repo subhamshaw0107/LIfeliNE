@@ -9,6 +9,8 @@
     "preview": "vite preview",
     "test": "npx tsx tests/m3/packetEngine.test.ts",
     "test:ble": "npx tsx tests/ble/bleMeshTransport.test.ts",
+    "test:security": "npx tsx tests/security/crypto.test.ts",
+    "test:all": "npx tsx tests/m3/packetEngine.test.ts && npx tsx tests/ble/bleMeshTransport.test.ts && npx tsx tests/security/crypto.test.ts",
     "cap:sync": "cap sync android"
   },
   "dependencies": {
