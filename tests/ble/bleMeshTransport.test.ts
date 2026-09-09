@@ -277,10 +277,37 @@ async function runTestSuite() {
   console.log('STARTING LIFELINE BLE TRANSPORT BOUNDARY TESTS');
   console.log('==================================================\n');
 
-  // Test 1: base64 round trip
+  // Test 1: base64 round trip & Raw-Byte Verification
   console.log('[BLE 1] Uint8Array <-> base64 round trip');
   const sample = new Uint8Array([0, 1, 2, 250, 255, 72, 101, 108, 108, 111]);
   assert(bytesEqual(base64ToUint8(uint8ToBase64(sample)), sample), 'Binary round trip is lossless');
+
+  // STEP 3 DETERMINISTIC RAW-BYTE PAYLOADS (Payload-agnostic transport tests)
+  console.log('\n[BLE 1A] Raw-Byte Test A: [1, 2, 3, 4, 5, 0, 127, 128, 255]');
+  const rawTestA = new Uint8Array([1, 2, 3, 4, 5, 0, 127, 128, 255]);
+  assert(bytesEqual(base64ToUint8(uint8ToBase64(rawTestA)), rawTestA), 'Raw Test A round-trip lossless');
+
+  console.log('\n[BLE 1B] Raw-Byte Test B: 300 bytes (0..255 repeated)');
+  const rawTestB = new Uint8Array(300);
+  for (let i = 0; i < 300; i++) rawTestB[i] = i % 256;
+  assert(bytesEqual(base64ToUint8(uint8ToBase64(rawTestB)), rawTestB), 'Raw Test B round-trip lossless');
+  const rawTestBFrames = encodeFrames(rawTestB, 20);
+  assert(rawTestBFrames.length === 25, `Raw Test B splits into ${rawTestBFrames.length} frames at MTU 23 (12B payload)`);
+  const rawTestBReassembler = new ReferenceReassembler();
+  let rawTestBOut: Uint8Array | null = null;
+  for (const f of rawTestBFrames) rawTestBOut = rawTestBReassembler.feed(f);
+  assert(rawTestBOut !== null && bytesEqual(rawTestBOut, rawTestB), 'Raw Test B reassembles byte-identical');
+
+  console.log('\n[BLE 1C] Raw-Byte Test C: 1000 bytes (0..255 repeated)');
+  const rawTestC = new Uint8Array(1000);
+  for (let i = 0; i < 1000; i++) rawTestC[i] = i % 256;
+  assert(bytesEqual(base64ToUint8(uint8ToBase64(rawTestC)), rawTestC), 'Raw Test C round-trip lossless');
+  const rawTestCFrames = encodeFrames(rawTestC, 20);
+  assert(rawTestCFrames.length === 84, `Raw Test C splits into ${rawTestCFrames.length} frames at MTU 23 (12B payload)`);
+  const rawTestCReassembler = new ReferenceReassembler();
+  let rawTestCOut: Uint8Array | null = null;
+  for (const f of rawTestCFrames) rawTestCOut = rawTestCReassembler.feed(f);
+  assert(rawTestCOut !== null && bytesEqual(rawTestCOut, rawTestC), 'Raw Test C reassembles byte-identical');
 
   // Reference SOS (~694 B) and ACK (~254 B) payloads
   const sos = createSosPacket({
