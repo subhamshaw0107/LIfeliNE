@@ -62,9 +62,12 @@
     <uses-permission
         android:name="android.permission.BLUETOOTH_ADMIN"
         android:maxSdkVersion="30" />
-    <uses-permission
-        android:name="android.permission.ACCESS_FINE_LOCATION"
-        android:maxSdkVersion="30" />
+
+    <!-- Real device GPS for SOS coordinates (all API levels).
+         BLE scanning itself stays neverForLocation; FINE/COARSE entries
+         exist solely so WebView geolocation can resolve the physical fix. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <!-- Foreground relay service + its notification (API-gated by runtime). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

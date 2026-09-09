@@ -186,6 +186,28 @@ const INITIAL_MOCK_SOS: SosPacket[] = [
   }
 ];
 
+/**
+ * Real device battery level (0-100) via the Battery Status API where the
+ * WebView exposes it (Chromium/Android). Falls back to the demo value when
+ * unavailable — never throws, never blocks SOS creation.
+ */
+async function getDeviceBatteryLevel(): Promise<number> {
+  try {
+    const nav = navigator as unknown as {
+      getBattery?: () => Promise<{ level?: number }>;
+    };
+    if (typeof nav.getBattery === 'function') {
+      const status = await nav.getBattery();
+      if (status && typeof status.level === 'number') {
+        return Math.max(0, Math.min(100, Math.round(status.level * 100)));
+      }
+    }
+  } catch {
+    // ignore — caller uses the demo fallback
+  }
+  return 79;
+}
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Current user / role - defaults to PERSON-A
   const [user, setUser] = useState<UserAccount | null>({
@@ -227,10 +249,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [meshStatus, setMeshStatus] = useState<MeshStatus>('CONNECTED');
   const [simpleNetworkStatus, setSimpleNetworkStatus] = useState<SimpleNetworkStatus>('CONNECTED');
 
+  // Platform flag (fixed for the session): native Android activates the
+  // real BleMeshTransport + BLE UUID identity; web stays on the mock demo.
+  const [isNative] = useState<boolean>(() => {
+    try {
+      return Capacitor.isNativePlatform();
+    } catch {
+      return false;
+    }
+  });
+
   // SOS state
   const [sosList, setSosList] = useState<SosPacket[]>(() => {
     const stored = storageService.getStoredSosPackets();
-    return stored.length > 0 ? stored : INITIAL_MOCK_SOS;
+    if (stored.length > 0) return stored;
+    // Fresh native installs start empty (real SOS packets only).
+    // Web/demo keeps the seeded sample packets for the demo dashboard.
+    return isNative ? [] : INITIAL_MOCK_SOS;
   });
 
   const [victimActiveSos, setVictimActiveSos] = useState<SosPacket | null>(null);
@@ -276,16 +311,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Real BLE connected peers: stored verbatim, no demo mapping, no
   // fabricated topology. Empty (and silent) in browser/mock mode.
   const [realPeerIds, setRealPeerIds] = useState<string[]>(() => demoMeshNetwork.getRealPeerIds());
-
-  // Platform flag (fixed for the session): native Android activates the
-  // real BleMeshTransport + BLE UUID identity; web stays on the mock demo.
-  const [isNative] = useState<boolean>(() => {
-    try {
-      return Capacitor.isNativePlatform();
-    } catch {
-      return false;
-    }
-  });
 
   // Subscribe to unified-mesh progress snapshots (per-hop route/hopCount,
   // HQ delivery, reverse ACK arrival) and mirror them into UI state.
@@ -358,6 +383,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       lastUpdated: Date.now()
     }));
   };
+
+  // REAL GPS (native Android only): acquire the physical device position
+  // once at startup so SOS packets carry real coordinates. Web/demo keeps
+  // the deterministic simulator default. Silent fallback keeps the default
+  // fix when permission is denied or GPS is unavailable.
+  useEffect(() => {
+    if (!isNative) return;
+    let cancelled = false;
+    geoService.getCurrentLocation().then(
+      coords => {
+        if (!cancelled) updateLocation(coords);
+      },
+      () => {}
+    );
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNative]);
 
   // DYNAMIC SOS PRIORITY ADAPTATION:
   // Automatically adapts the priority of an active SOS when sender's disaster-risk status changes.
@@ -484,7 +528,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       encryptionStatus: 'AUTHENTICATED_AES_GCM_VALID',
       encryptedPayload: encResult.ciphertext,
       iv: encResult.iv,
-      batteryLevel: 79,
+      batteryLevel: await getDeviceBatteryLevel(),
       createdAt: now,
       statusHistory: [
         { status: 'CREATED', timestamp: now, detail: `SOS created by sender ${senderId}` },
