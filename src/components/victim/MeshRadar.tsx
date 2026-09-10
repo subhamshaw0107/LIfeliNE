@@ -87,8 +87,11 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
     }
   ];
 
-  // Demo hop list (mock Person chain) vs live BLE peer list.
-  const displayHops = isBleMode ? realHops : hops;
+  // Truthful runtime peer list:
+  // In native Android runtime, ONLY show real BLE peers. If no peers are in range,
+  // show this device and indicate 'No connected peers'.
+  // In browser/demo mode, show the multi-hop demonstration chain (hops).
+  const displayHops = isNative ? realHops : (isBleMode ? realHops : hops);
 
   return (
     <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -217,7 +220,7 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
                     width: 22,
                     height: 22,
                     borderRadius: '50%',
-                    background: idx === 0 ? '#EF4444' : idx === hops.length - 1 ? '#0284C7' : '#334155',
+                    background: idx === 0 ? '#EF4444' : idx === displayHops.length - 1 ? '#0284C7' : '#334155',
                     color: '#FFF',
                     display: 'flex',
                     alignItems: 'center',
@@ -225,7 +228,7 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
                     fontSize: 10,
                     fontWeight: 800
                   }}>
-                    {idx === 0 ? (isBleMode ? '●' : 'A') : isBleMode ? `${idx}` : idx === 1 ? 'B' : idx === 2 ? 'C' : idx === 3 ? 'D' : 'HQ'}
+                    {idx === 0 ? '●' : (isNative || isBleMode) ? `${idx}` : idx === 1 ? 'B' : idx === 2 ? 'C' : idx === 3 ? 'D' : 'HQ'}
                   </div>
 
                   <div>
@@ -251,7 +254,7 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
                 </span>
               </div>
 
-              {idx < hops.length - 1 && (
+              {idx < displayHops.length - 1 && (
                 <div style={{ display: 'flex', justifyContent: 'center', margin: '-2px 0' }}>
                   <div style={{
                     width: 2,
@@ -262,6 +265,24 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
               )}
             </React.Fragment>
           ))}
+
+          {isNative && realPeerIds.length === 0 && (
+            <div style={{
+              background: 'rgba(245, 158, 11, 0.08)',
+              border: '1px dashed rgba(245, 158, 11, 0.3)',
+              borderRadius: 10,
+              padding: '12px',
+              textAlign: 'center',
+              marginTop: 4
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: '#F59E0B' }}>
+                📡 NO PEERS CURRENTLY IN RANGE
+              </div>
+              <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
+                Scanning for nearby LIFELINE BLE devices. Packets will be stored and carried until a peer connects.
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -319,9 +340,9 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
           {isBleMode ? 'YOU' : 'PERSON A (YOU)'}
         </div>
 
-        {/* Floating Relay Nodes: live BLE peers (evenly placed, no invented
-            positions/distances) vs demo meshNodes (unchanged below) */}
-        {isBleMode
+        {/* Floating Relay Nodes: in native mode or BLE mode, render ONLY real BLE peers (no fake nodes).
+            In browser demo mode, render demo meshNodes (Person B, C, D, HQ). */}
+        {(isNative || isBleMode)
           ? realPeerIds.map((peerId, idx) => {
               const angle = (idx / realPeerIds.length) * 2 * Math.PI - Math.PI / 2;
               const radius = 64;
@@ -386,8 +407,8 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
         </div>
       </div>
 
-      {/* Interactive Range Simulator Trigger (demo only: hidden in BLE mode) */}
-      {!isBleMode && (
+      {/* Interactive Range Simulator Trigger (browser demo only: strictly hidden in native mode) */}
+      {!isNative && !isBleMode && (
       <div style={{
         background: 'rgba(56, 189, 248, 0.08)',
         border: '1px solid rgba(56, 189, 248, 0.25)',

@@ -58,6 +58,8 @@ export interface SosPacket {
   batteryLevel: number;
   createdAt: number;
   recipientId?: string;
+  signature?: string; // Hex-encoded ECDSA P-256 signature
+  signerPublicKey?: string; // Hex-encoded SPKI ECDSA P-256 public key
   expiresAt?: number;
   forwardingState?: 'PENDING' | 'FORWARDING' | 'FORWARDED' | 'DELIVERED' | 'EXPIRED';
   acknowledgedAt?: number;

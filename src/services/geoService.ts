@@ -84,12 +84,13 @@ export class GeoService {
   };
 
   /**
-   * Get victim's current location. Attempts browser geolocation,
-   * falls back safely to default hackathon demo coordinates.
+   * Get victim's current location. Attempts device/browser geolocation.
+   * In demo mode or if requireRealGps is false, falls back to default coordinates.
+   * If requireRealGps is true, rejects if geolocation fails or is denied.
    */
-  async getCurrentLocation(): Promise<LocationCoords> {
-    return new Promise((resolve) => {
-      if ('geolocation' in navigator) {
+  async getCurrentLocation(options?: { requireRealGps?: boolean }): Promise<LocationCoords> {
+    return new Promise((resolve, reject) => {
+      if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
         navigator.geolocation.getCurrentPosition(
           (position) => {
             resolve({
@@ -99,14 +100,22 @@ export class GeoService {
               lastUpdated: Date.now()
             });
           },
-          (_err) => {
-            // Permission denied or offline GPS fallback
-            resolve({ ...this.defaultCoords, lastUpdated: Date.now() });
+          (err) => {
+            if (options?.requireRealGps) {
+              reject(err);
+            } else {
+              // Permission denied or offline GPS fallback for browser demo
+              resolve({ ...this.defaultCoords, lastUpdated: Date.now() });
+            }
           },
-          { enableHighAccuracy: true, timeout: 3000, maximumAge: 10000 }
+          { enableHighAccuracy: true, timeout: 5000, maximumAge: 10000 }
         );
       } else {
-        resolve({ ...this.defaultCoords, lastUpdated: Date.now() });
+        if (options?.requireRealGps) {
+          reject(new Error('Geolocation not available in environment'));
+        } else {
+          resolve({ ...this.defaultCoords, lastUpdated: Date.now() });
+        }
       }
     });
   }

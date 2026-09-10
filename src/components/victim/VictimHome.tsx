@@ -38,7 +38,9 @@ export const VictimHome: React.FC<Props> = ({
     rateLimitState,
     victimActiveSos,
     sendSos,
-    markSafe
+    markSafe,
+    isNative,
+    isGpsReal
   } = useApp();
 
   const [isSending, setIsSending] = useState(false);

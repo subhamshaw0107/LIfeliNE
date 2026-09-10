@@ -355,7 +355,9 @@ async function runSecurityTestSuite() {
     id: 'SOS-E2E-9999',
     senderId: 'VICTIM-ALICE',
     recipientId: 'TACTICAL-HQ',
-    createdAt: 1773000000000
+    // Fresh timestamp: PacketEngine validates against the real wall clock,
+    // so a hardcoded past date would (correctly) expire. Intent is a live packet.
+    createdAt: Date.now()
   };
 
   // Test N: Real SosPacket E2EE

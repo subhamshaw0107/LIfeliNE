@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Local environment files (may contain Supabase URL/anon key).
+# Only .env.example (placeholders) is committed.
+.env
+.env.*.local
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
