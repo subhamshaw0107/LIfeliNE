@@ -15,6 +15,7 @@ import { cryptoService } from '../services/cryptoService';
 import { geoService, calculatePriorityFromRisk, DEFAULT_DISASTER_ZONES, RESCUE_HEADQUARTERS } from '../services/geoService';
 import { rateLimiter } from '../services/rateLimiter';
 import { storageService } from '../services/storageService';
+import { syncNow } from '../services/cloudSyncService';
 import { meshEngine, DEMO_MESH_NODES } from '../services/meshEngine';
 import { audioService } from '../services/audioService';
 import { demoMeshNetwork } from '../services/demoMeshNetwork';
@@ -43,6 +44,9 @@ interface AppContextType {
   // Runtime platform: true on native Android (Capacitor), false on web.
   // Native mode auto-activates BleMeshTransport via demoMeshNetwork.
   isNative: boolean;
+  // Truthful GPS telemetry flag: true only when real GPS coordinates have been acquired.
+  // false when fallback/demo coordinates are in effect.
+  isGpsReal: boolean;
   rateLimitState: RateLimitState;
   sosList: SosPacket[];
   victimActiveSos: SosPacket | null;
@@ -240,6 +244,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     accuracy: 8,
     lastUpdated: Date.now()
   });
+  // Truthful GPS telemetry flag: false until real physical GPS fix is acquired
+  const [isGpsReal, setIsGpsReal] = useState<boolean>(false);
 
   // Disaster zones
   const [disasterZones] = useState<DisasterZone[]>(DEFAULT_DISASTER_ZONES);
@@ -385,17 +391,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   // REAL GPS (native Android only): acquire the physical device position
-  // once at startup so SOS packets carry real coordinates. Web/demo keeps
-  // the deterministic simulator default. Silent fallback keeps the default
-  // fix when permission is denied or GPS is unavailable.
+  // once at startup so SOS packets carry real coordinates.
+  // If permission is denied or location is unavailable, isGpsReal remains false
+  // and the UI explicitly indicates the location status instead of masquerading.
   useEffect(() => {
-    if (!isNative) return;
     let cancelled = false;
-    geoService.getCurrentLocation().then(
+    geoService.getCurrentLocation({ requireRealGps: isNative }).then(
       coords => {
-        if (!cancelled) updateLocation(coords);
+        if (!cancelled) {
+          updateLocation(coords);
+          setIsGpsReal(true);
+          console.log(`[GPS] Physical fix acquired: ${coords.latitude}, ${coords.longitude} (±${coords.accuracy}m)`);
+        }
       },
-      () => {}
+      err => {
+        if (!cancelled) {
+          setIsGpsReal(false);
+          console.warn('[GPS] Native location provider unavailable or permission denied:', err);
+        }
+      }
     );
     return () => {
       cancelled = true;
@@ -537,10 +551,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       ]
     };
 
+    // 6b. Cryptographically sign SOS packet with device's ECDSA P-256 identity key
+    const signed = await cryptoService.signSosPacket(newPacket);
+    newPacket.signature = signed.signature;
+    newPacket.signerPublicKey = signed.publicKeyHex;
+
     // Save locally
     storageService.saveSosPacket(newPacket);
     setVictimActiveSos(newPacket);
     setSosList(prev => [newPacket, ...prev.filter(p => p.id !== newPacket.id)]);
+
+    console.log(`[PACKET] SOS created: ${newPacket.id}, Priority: ${newPacket.priority}, Sender: ${senderId}, Device: ${deviceId}, GPS: ${newPacket.latitude}, ${newPacket.longitude}`);
 
     // IF PERSON FROM RED AREA GIVES SOS -> TRIGGER POPUP!
     if (riskEval.riskLevel === 'CRITICAL') {
@@ -629,13 +650,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  // Cloud sync when internet returns
+  // Cloud sync (manual trigger): delegates to CloudSyncService, which
+  // uploads queued SOS IDs and removes ONLY server-confirmed ones.
+  // Fully asynchronous: emergency PacketEngine/BLE traffic never waits
+  // on it, and offline operation is unaffected.
   const syncWithCloud = async () => {
     setSyncPending(true);
-    await new Promise(r => setTimeout(r, 1200));
-    storageService.clearSyncQueue();
-    setSyncPending(false);
-    audioService.playAcknowledgeChime();
+    try {
+      await syncNow();
+    } catch {
+      // syncNow never throws by contract; belt-and-braces only
+    } finally {
+      setSyncPending(false);
+      audioService.playAcknowledgeChime();
+    }
   };
 
   // Demo Mode Runner
@@ -731,6 +759,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         meshNodes,
         realPeerIds,
         isNative,
+        isGpsReal,
         rateLimitState,
         sosList,
         victimActiveSos,

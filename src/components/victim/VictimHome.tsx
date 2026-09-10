@@ -37,7 +37,9 @@ export const VictimHome: React.FC<Props> = ({
     rateLimitState,
     victimActiveSos,
     sendSos,
-    markSafe
+    markSafe,
+    isNative,
+    isGpsReal
   } = useApp();
 
   const [isSending, setIsSending] = useState(false);
@@ -138,8 +140,18 @@ export const VictimHome: React.FC<Props> = ({
         {/* Location Display */}
         <div className="telemetry-row">
           <div className="telemetry-label">
-            <MapPin size={15} color="#38BDF8" />
+            <MapPin size={15} color={isGpsReal ? '#10B981' : '#38BDF8'} />
             <span>📍 LOCATION</span>
+            <span style={{
+              fontSize: 9,
+              fontWeight: 800,
+              padding: '1px 5px',
+              borderRadius: 4,
+              background: isGpsReal ? 'rgba(16, 185, 129, 0.2)' : 'rgba(148, 163, 184, 0.2)',
+              color: isGpsReal ? '#10B981' : '#94A3B8'
+            }}>
+              {isGpsReal ? 'REAL GPS' : 'DEMO LOCATION'}
+            </span>
           </div>
           <div className="telemetry-value">
             {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
@@ -196,70 +208,72 @@ export const VictimHome: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Quick GPS Zone Simulator (Simulate being in RED, YELLOW, or GREEN zone) */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 6,
-          marginTop: 2,
-          padding: '4px 6px',
-          background: 'rgba(255,255,255,0.03)',
-          borderRadius: 6,
-          fontSize: 10
-        }}>
-          <span style={{ color: '#64748B', fontWeight: 600 }}>Simulate Zone:</span>
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button
-              onClick={() => updateLocation({ latitude: 22.9780, longitude: 88.4380 })}
-              style={{
-                background: riskEval.riskLevel === 'CRITICAL' ? 'rgba(239,68,68,0.35)' : 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(239,68,68,0.4)',
-                color: '#EF4444',
-                padding: '2px 6px',
-                borderRadius: 4,
-                fontSize: 10,
-                fontWeight: 700,
-                cursor: 'pointer'
-              }}
-              title="Move victim to RED / CRITICAL Zone (Flood breach)"
-            >
-              🔴 RED
-            </button>
-            <button
-              onClick={() => updateLocation({ latitude: 22.9660, longitude: 88.4320 })}
-              style={{
-                background: riskEval.riskLevel === 'WARNING' ? 'rgba(245,158,11,0.35)' : 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(245,158,11,0.4)',
-                color: '#F59E0B',
-                padding: '2px 6px',
-                borderRadius: 4,
-                fontSize: 10,
-                fontWeight: 700,
-                cursor: 'pointer'
-              }}
-              title="Move victim to YELLOW / WARNING Zone (Perimeter)"
-            >
-              🟡 YELLOW
-            </button>
-            <button
-              onClick={() => updateLocation({ latitude: 22.9450, longitude: 88.4000 })}
-              style={{
-                background: riskEval.riskLevel === 'SAFE' ? 'rgba(16,185,129,0.35)' : 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(16,185,129,0.4)',
-                color: '#10B981',
-                padding: '2px 6px',
-                borderRadius: 4,
-                fontSize: 10,
-                fontWeight: 700,
-                cursor: 'pointer'
-              }}
-              title="Move victim to GREEN / SAFE Zone (Outside danger area)"
-            >
-              🟢 GREEN
-            </button>
+        {/* Quick GPS Zone Simulator (browser demo only: hidden in native runtime) */}
+        {!isNative && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 6,
+            marginTop: 2,
+            padding: '4px 6px',
+            background: 'rgba(255,255,255,0.03)',
+            borderRadius: 6,
+            fontSize: 10
+          }}>
+            <span style={{ color: '#64748B', fontWeight: 600 }}>Simulate Zone:</span>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button
+                onClick={() => updateLocation({ latitude: 22.9780, longitude: 88.4380 })}
+                style={{
+                  background: riskEval.riskLevel === 'CRITICAL' ? 'rgba(239,68,68,0.35)' : 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(239,68,68,0.4)',
+                  color: '#EF4444',
+                  padding: '2px 6px',
+                  borderRadius: 4,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+                title="Move victim to RED / CRITICAL Zone (Flood breach)"
+              >
+                🔴 RED
+              </button>
+              <button
+                onClick={() => updateLocation({ latitude: 22.9660, longitude: 88.4320 })}
+                style={{
+                  background: riskEval.riskLevel === 'WARNING' ? 'rgba(245,158,11,0.35)' : 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(245,158,11,0.4)',
+                  color: '#F59E0B',
+                  padding: '2px 6px',
+                  borderRadius: 4,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+                title="Move victim to YELLOW / WARNING Zone (Perimeter)"
+              >
+                🟡 YELLOW
+              </button>
+              <button
+                onClick={() => updateLocation({ latitude: 22.9450, longitude: 88.4000 })}
+                style={{
+                  background: riskEval.riskLevel === 'SAFE' ? 'rgba(16,185,129,0.35)' : 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(16,185,129,0.4)',
+                  color: '#10B981',
+                  padding: '2px 6px',
+                  borderRadius: 4,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+                title="Move victim to GREEN / SAFE Zone (Outside danger area)"
+              >
+                🟢 GREEN
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* GIANT SOS BUTTON (Zero-questionnaire, instant trigger) */}

@@ -9,12 +9,14 @@
     "preview": "vite preview",
     "test": "npx tsx tests/m3/packetEngine.test.ts",
     "test:ble": "npx tsx tests/ble/bleMeshTransport.test.ts",
+    "test:cloud": "npx tsx tests/cloud/cloudSync.test.ts",
     "cap:sync": "cap sync android"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.1",
     "@capacitor/cli": "^8.5.1",
     "@capacitor/core": "^8.5.1",
+    "@supabase/supabase-js": "^2.116.0",
     "canvas-confetti": "^1.9.4",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.16.0",

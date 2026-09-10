@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { WifiOff, Wifi, Radio, Navigation, BatteryCharging } from 'lucide-react';
 
 export const HardwareStatusStrip: React.FC = () => {
-  const { isInternetDown, meshStatus, location, setIsInternetDown } = useApp();
+  const { isInternetDown, meshStatus, location, setIsInternetDown, isGpsReal, isNative } = useApp();
 
   return (
     <div className="hardware-status-strip">
@@ -29,8 +29,10 @@ export const HardwareStatusStrip: React.FC = () => {
 
       {/* GPS Status */}
       <div className="status-pill">
-        <Navigation size={13} color="#10B981" />
-        <span style={{ color: '#10B981' }}>GPS ±{location.accuracy}m</span>
+        <Navigation size={13} color={isGpsReal ? '#10B981' : '#F59E0B'} />
+        <span style={{ color: isGpsReal ? '#10B981' : '#F59E0B' }}>
+          {isGpsReal ? `GPS ±${location.accuracy}m` : (isNative ? 'GPS: PENDING' : 'GPS: DEMO')}
+        </span>
       </div>
 
       {/* Mesh Radio Status */}

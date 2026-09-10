@@ -77,6 +77,36 @@ class StorageService {
     }
   }
 
+  /**
+   * Read the full pending queue (survives reloads via localStorage).
+   */
+  getQueuedIds(): string[] {
+    try {
+      if (typeof window === 'undefined' || !window.localStorage) return [];
+      const data = localStorage.getItem(STORAGE_KEY_OFFLINE_QUEUE);
+      const queue: unknown = data ? JSON.parse(data) : [];
+      if (!Array.isArray(queue)) return [];
+      return queue.filter((id): id is string => typeof id === 'string');
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Remove ONLY confirmed IDs. Failed/unconfirmed IDs stay queued.
+   * This is the sole removal path used after successful cloud upload.
+   */
+  removeFromSyncQueue(ids: string[]): void {
+    if (!ids || ids.length === 0) return;
+    try {
+      if (typeof window === 'undefined' || !window.localStorage) return;
+      const remaining = this.getQueuedIds().filter(id => !ids.includes(id));
+      localStorage.setItem(STORAGE_KEY_OFFLINE_QUEUE, JSON.stringify(remaining));
+    } catch {
+      // ignore
+    }
+  }
+
   clearSyncQueue(): void {
     try {
       if (typeof window !== 'undefined' && window.localStorage) {

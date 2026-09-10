@@ -24,6 +24,8 @@ export interface CreateSosPacketParams {
   encryptedPayload?: string;
   iv?: string;
   recipientId?: string;
+  signature?: string;
+  signerPublicKey?: string;
 }
 
 /**
@@ -90,6 +92,8 @@ export function createSosPacket(params: CreateSosPacketParams): SosPacket {
     batteryLevel: params.batteryLevel ?? 100,
     createdAt: now,
     recipientId: params.recipientId,
+    signature: params.signature,
+    signerPublicKey: params.signerPublicKey,
     statusHistory: [
       {
         status: initialStatus,
@@ -256,6 +260,14 @@ export function isSosPacket(packet: unknown): packet is SosPacket {
   );
 }
 
+export function isSosPacketSigned(packet: unknown): packet is SosPacket & { signature: string } {
+  return (
+    isSosPacket(packet) &&
+    typeof packet.signature === 'string' &&
+    packet.signature.trim().length >= 64
+  );
+}
+
 /**
  * Validates essential fields of a SosPacket.
  */
@@ -271,6 +283,22 @@ export function validateSosPacket(packet: unknown): { isValid: boolean; error?: 
   }
   if (packet.ttl < 0) {
     return { isValid: false, error: 'Packet TTL cannot be negative' };
+  }
+  if (packet.signature !== undefined) {
+    if (typeof packet.signature !== 'string' || packet.signature.trim().length < 64) {
+      return { isValid: false, error: 'Invalid cryptographic signature format' };
+    }
+    if (!/^[0-9a-fA-F]+$/.test(packet.signature)) {
+      return { isValid: false, error: 'Signature must be valid hex' };
+    }
+  }
+  if (packet.signerPublicKey !== undefined) {
+    if (typeof packet.signerPublicKey !== 'string' || packet.signerPublicKey.trim().length < 64) {
+      return { isValid: false, error: 'Invalid signer public key format' };
+    }
+    if (!/^[0-9a-fA-F]+$/.test(packet.signerPublicKey)) {
+      return { isValid: false, error: 'Signer public key must be valid hex' };
+    }
   }
   return { isValid: true };
 }
