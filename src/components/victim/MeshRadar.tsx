@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { HardwareStatusStrip } from '../common/HardwareStatusStrip';
-import { BleDiagnosticsPanel } from '../common/BleDiagnosticsPanel';
 import { Radio, ArrowLeft, RefreshCw } from 'lucide-react';
 
 interface Props {
@@ -363,7 +362,6 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
           </div>
         ))}
       </div>
-      {import.meta.env.DEV && <BleDiagnosticsPanel />}
     </div>
   );
 };

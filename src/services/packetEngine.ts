@@ -111,6 +111,17 @@ export class PacketEngine {
     payload: Record<string, unknown> | null;
   } | null = null;
 
+  private isRescueEndpoint: boolean = false;
+  private maxHops: number = 10;
+  private stats = {
+    messagesReceived: 0,
+    messagesRelayed: 0,
+    messagesDropped: 0,
+    lastMessageId: null as string | null,
+    lastMessageTime: null as number | null,
+    lastHopCount: 0
+  };
+
   constructor(options?: {
     localNodeId?: string;
     sosRepo?: SosRepository;
@@ -133,6 +144,33 @@ export class PacketEngine {
     if (options?.transport) {
       this.setTransport(options.transport);
     }
+  }
+
+  setIsRescueEndpoint(isRescue: boolean): void {
+    this.isRescueEndpoint = isRescue;
+  }
+
+  getIsRescueEndpoint(): boolean {
+    return this.isRescueEndpoint;
+  }
+
+  setMaxHops(hops: number): void {
+    this.maxHops = hops;
+  }
+
+  getMaxHops(): number {
+    return this.maxHops;
+  }
+
+  getQueueSize(): number {
+    return this.queue.size();
+  }
+
+  getStats() {
+    return {
+      ...this.stats,
+      queueSize: this.queue.size()
+    };
   }
 
   /**
@@ -168,13 +206,23 @@ export class PacketEngine {
     return this.localNodeId;
   }
 
-  setTransport(transport: MeshTransport): void {    this.transport = transport;
+  setTransport(transport: MeshTransport): void {
+    this.transport = transport;
     // Return the processing promise so a transport (e.g. MockMeshTransport)
     // can await end-to-end delivery into this engine. The declared callback
     // type returns void, so the promise is awaitable yet safely ignorable.
     this.transport.onPacketReceived((senderPeerId, packetBytes) =>
       this.processIncomingBytes(senderPeerId, packetBytes) as unknown as void
     );
+    // Auto-resume Store-Carry-Forward queue when new BLE/mesh peers connect
+    if (typeof (this.transport as any).onPeersChanged === 'function') {
+      (this.transport as any).onPeersChanged((peers: string[]) => {
+        if (peers.length > 0) {
+          console.log(`[PacketEngine] Connected peers updated (${peers.length}). Resuming pending relays...`);
+          void this.resumePendingRelays();
+        }
+      });
+    }
   }
 
   getTransport(): MeshTransport | null {
@@ -249,8 +297,10 @@ export class PacketEngine {
    * Primary entry point for raw bytes arriving over BLE/Wi-Fi Direct.
    */
   async processIncomingBytes(senderPeerId: string, packetBytes: Uint8Array): Promise<boolean> {
+    this.stats.messagesReceived++;
     const packet = deserializePacketFromBytes(packetBytes);
     if (!packet) {
+      this.stats.messagesDropped++;
       console.warn('[PacketEngine] Received invalid or unparseable packet bytes from', senderPeerId);
       return false;
     }
@@ -340,9 +390,14 @@ export class PacketEngine {
    * Pipeline for incoming SosPackets
    */
   private async processSosPacket(packet: SosPacket, incomingFrom?: string): Promise<boolean> {
+    this.stats.lastMessageId = packet.id;
+    this.stats.lastMessageTime = Date.now();
+    this.stats.lastHopCount = packet.hopCount;
+
     // 1. Validate Structure
     const validation = validateSosPacket(packet);
     if (!validation.isValid) {
+      this.stats.messagesDropped++;
       console.warn('[PacketEngine] Dropping invalid SOS packet:', validation.error);
       return false;
     }
@@ -356,6 +411,7 @@ export class PacketEngine {
       authenticated = false;
     }
     if (!authenticated) {
+      this.stats.messagesDropped++;
       this.emitEvent({
         type: 'SECURITY_DROPPED',
         nodeId: this.localNodeId,
@@ -371,6 +427,7 @@ export class PacketEngine {
     // MUST run strictly BEFORE deduplication, storage, geo-triage, and Store-Carry-Forward queueing.
     const replayStatus = this.replayProtection.checkAndRecord(packet);
     if (replayStatus !== 'ACCEPT') {
+      this.stats.messagesDropped++;
       this.emitEvent({
         type: 'SECURITY_DROPPED',
         nodeId: this.localNodeId,
@@ -408,7 +465,8 @@ export class PacketEngine {
     }
 
     // 4. TTL & Hop Count Bounds Check
-    if (packet.ttl <= 0 || packet.hopCount >= 10) {
+    if (packet.ttl <= 0 || packet.hopCount >= this.maxHops) {
+      this.stats.messagesDropped++;
       this.emitEvent({
         type: 'TTL_EXPIRED',
         nodeId: this.localNodeId,
@@ -458,7 +516,7 @@ export class PacketEngine {
     });
 
     // 8. Check Destination / Rescue HQ
-    const isDestination = this.localNodeId === 'NODE-RESCUE-CMD' || this.localNodeId === 'TACTICAL-HQ';
+    const isDestination = this.isRescueEndpoint || this.localNodeId === 'NODE-RESCUE-CMD' || this.localNodeId === 'TACTICAL-HQ';
     if (isDestination) {
       this.sosRepo.updateStatus(
         updatedPacket.id,
@@ -679,6 +737,7 @@ export class PacketEngine {
     const sent = await this.transport.sendPacket(targetPeer, bytes);
 
     if (sent) {
+      this.stats.messagesRelayed++;
       this.setNetworkStatus('FORWARDED');
       this.emitEvent({
         type: 'FORWARD',

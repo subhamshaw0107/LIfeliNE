@@ -422,12 +422,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
       setVictimActiveSos(prev => (prev && prev.id === progress.packetId ? snapshot : prev));
       setSosList(prev => {
-        if (!prev.some(p => p.id === progress.packetId)) return prev;
+        if (!prev.some(p => p.id === progress.packetId)) {
+          return [snapshot, ...prev];
+        }
         return prev.map(p => (p.id === progress.packetId ? snapshot : p));
       });
     });
     return () => unsub();
   }, []);
+
+  // Sync Rescue Endpoint role with PacketEngine
+  useEffect(() => {
+    demoMeshNetwork.setIsRescueEndpoint(role === 'RESCUE_TEAM');
+  }, [role]);
 
   // Subscribe to real BLE connected-peer changes. IDs arrive verbatim
   // (e.g. ["DEVICE-ABC"]) and are stored as-is — no Person labels,

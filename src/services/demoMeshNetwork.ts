@@ -315,6 +315,20 @@ class DemoMeshNetwork {
   }
 
   /**
+   * Diagnostic statistics from this device's PacketEngine.
+   */
+  getEngineStats() {
+    return this.selfEngine.getStats();
+  }
+
+  /**
+   * Configure whether this device acts as a designated Rescue Endpoint.
+   */
+  setIsRescueEndpoint(isRescue: boolean): void {
+    this.selfEngine.setIsRescueEndpoint(isRescue);
+  }
+
+  /**
    * Observe real BLE connected-peer changes. Fires with the exact snapshot
    * reported by BleMeshTransport on every connect/disconnect — IDs are
    * forwarded unmodified (never mapped to Person A/B/C/D, no coordinates).
