@@ -1,107 +1,113 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { HardwareStatusStrip } from '../common/HardwareStatusStrip';
-import { MessageSquare, Send, CheckCircle2, AlertOctagon, HeartPulse, Truck, Users, Droplets, Ban } from 'lucide-react';
-
-const PREDEFINED_MESSAGES = [
-  { text: 'I need help.', icon: AlertOctagon, color: '#EF4444' },
-  { text: 'We are trapped.', icon: Users, color: '#EF4444' },
-  { text: 'Medical help needed.', icon: HeartPulse, color: '#EF4444' },
-  { text: 'We need evacuation.', icon: Truck, color: '#F59E0B' },
-  { text: 'People are injured.', icon: HeartPulse, color: '#EF4444' },
-  { text: 'We need food and water.', icon: Droplets, color: '#F59E0B' },
-  { text: 'Road is blocked.', icon: Ban, color: '#F59E0B' },
-  { text: 'I am safe.', icon: CheckCircle2, color: '#10B981' }
-];
+import { Send, CheckCircle2, AlertTriangle, HeartPulse, Truck, Users, Droplets, Ban, ArrowLeft } from 'lucide-react';
 
 export const EmergencyChat: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  const { sendQuickMessage, sosList, user, location } = useApp();
+  const { sendQuickMessage, sosList, user, location, t } = useApp();
   const [customText, setCustomText] = useState('');
-  const [lastSentText, setLastSentText] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
+
+  const PREDEFINED_MESSAGES = [
+    { text: t('msgHelp'), icon: AlertTriangle, color: '#DC2626' },
+    { text: t('msgTrapped'), icon: Users, color: '#DC2626' },
+    { text: t('msgMedical'), icon: HeartPulse, color: '#DC2626' },
+    { text: t('msgEvac'), icon: Truck, color: '#D97706' },
+    { text: t('msgInjured'), icon: HeartPulse, color: '#DC2626' },
+    { text: t('msgWater'), icon: Droplets, color: '#D97706' },
+    { text: t('msgBlocked'), icon: Ban, color: '#D97706' },
+    { text: t('msgSafe'), icon: CheckCircle2, color: '#16A34A' }
+  ];
 
   const handleSend = async (msg: string) => {
-    if (!msg.trim()) return;
-    setLastSentText(msg);
-    await sendQuickMessage(msg);
-    setCustomText('');
+    if (!msg.trim() || isSending) return;
+    setIsSending(true);
+    try {
+      await sendQuickMessage(msg);
+      setCustomText('');
+    } finally {
+      setIsSending(false);
+    }
   };
 
-  // Messages sent by this user
-  const myMessages = sosList.filter(p => p.userId === user?.userId);
+  const myMessages = sosList.filter((p) => p.userId === user?.userId);
 
   return (
-    <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* Header */}
+    <div style={{ padding: '16px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Top Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <button
           onClick={onBack}
           style={{
             background: 'transparent',
             border: 'none',
-            color: '#38BDF8',
+            color: '#2563EB',
             fontSize: 14,
             fontWeight: 700,
-            cursor: 'pointer'
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4
           }}
         >
-          ← Back
+          <ArrowLeft size={16} />
+          <span>Back</span>
         </button>
-        <div style={{ fontWeight: 800, fontSize: 16, color: '#FFF' }}>💬 OFFLINE CHAT</div>
-        <div style={{ width: 40 }}></div>
+        <div style={{ fontWeight: 800, fontSize: 16, color: '#0F172A' }}>
+          {t('chatHeader')}
+        </div>
+        <div style={{ width: 40 }} />
       </div>
 
       <HardwareStatusStrip />
 
-      {/* Notice */}
-      <div style={{
-        background: 'rgba(56, 189, 248, 0.1)',
-        border: '1px solid rgba(56, 189, 248, 0.3)',
-        borderRadius: 12,
-        padding: '8px 12px',
-        fontSize: 11,
-        color: '#BAE6FD',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 2
-      }}>
-        <div style={{ fontWeight: 700 }}>📡 MESH DIRECT BROADCAST</div>
-        <div>Messages are delivered via Store-Carry-Forward mesh. Coords ({location.latitude}, {location.longitude}) and Device ID auto-attached.</div>
+      {/* Notice Banner */}
+      <div
+        style={{
+          background: '#EFF6FF',
+          border: '1px solid #BFDBFE',
+          borderRadius: 12,
+          padding: '10px 12px',
+          fontSize: 12,
+          color: '#1E40AF',
+          lineHeight: 1.4
+        }}
+      >
+        <div style={{ fontWeight: 700, marginBottom: 2 }}>📡 MESH BROADCAST</div>
+        <div>{t('chatNotice')} ({location.latitude.toFixed(4)}, {location.longitude.toFixed(4)})</div>
       </div>
 
-      {/* Predefined 1-Tap Emergency Messages */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase' }}>
-          Tap to Broadcast Instantly:
+      {/* Predefined 1-Tap Messages */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>
+          {t('presetHeader')}
         </div>
 
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: 8
-        }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {PREDEFINED_MESSAGES.map((item, idx) => {
             const Icon = item.icon;
             return (
               <button
                 key={idx}
                 onClick={() => handleSend(item.text)}
+                disabled={isSending}
                 style={{
-                  background: 'var(--bg-card)',
-                  border: '1px solid var(--border-card)',
+                  background: '#FFFFFF',
+                  border: '1px solid #CBD5E1',
                   borderRadius: 12,
-                  padding: '10px',
+                  padding: '12px 10px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: 8,
                   textAlign: 'left',
                   cursor: 'pointer',
-                  color: '#FFF',
-                  fontSize: 12,
+                  color: '#0F172A',
+                  fontSize: 13,
                   fontWeight: 600,
-                  transition: 'all 0.15s'
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
                 }}
               >
-                <Icon size={16} color={item.color} style={{ flexShrink: 0 }} />
+                <Icon size={18} color={item.color} style={{ flexShrink: 0 }} />
                 <span>{item.text}</span>
               </button>
             );
@@ -109,21 +115,22 @@ export const EmergencyChat: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         </div>
       </div>
 
-      {/* Optional Custom Input */}
+      {/* Custom Text Input */}
       <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
         <input
           type="text"
           value={customText}
           onChange={(e) => setCustomText(e.target.value)}
-          placeholder="Optional custom message..."
+          placeholder={t('customMsgPlaceholder')}
           style={{
             flex: 1,
-            background: 'rgba(0, 0, 0, 0.4)',
-            border: '1px solid var(--border-card)',
-            borderRadius: 10,
-            padding: '10px 14px',
-            color: '#FFF',
-            fontSize: 13,
+            height: 48,
+            background: '#FFFFFF',
+            border: '1px solid #CBD5E1',
+            borderRadius: 12,
+            padding: '0 14px',
+            color: '#0F172A',
+            fontSize: 14,
             outline: 'none'
           }}
           onKeyDown={(e) => {
@@ -132,58 +139,56 @@ export const EmergencyChat: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         />
         <button
           onClick={() => handleSend(customText)}
+          disabled={isSending}
           style={{
-            background: 'linear-gradient(135deg, #0284C7, #0369A1)',
+            width: 48,
+            height: 48,
+            background: '#2563EB',
             border: 'none',
-            borderRadius: 10,
-            padding: '0 16px',
-            color: '#FFF',
+            borderRadius: 12,
+            color: '#FFFFFF',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
           }}
         >
-          <Send size={16} />
+          <Send size={18} />
         </button>
       </div>
 
-      {/* Recent Mesh Messages History */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase' }}>
-          Sent Emergency Messages ({myMessages.length}):
+      {/* Sent History */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>
+          {t('sentHistoryHeader')} ({myMessages.length}):
         </div>
 
         {myMessages.length === 0 ? (
-          <div style={{ fontSize: 12, color: '#64748B', textAlign: 'center', padding: '16px' }}>
-            No messages sent yet. Tap any preset above.
+          <div style={{ fontSize: 13, color: '#64748B', textAlign: 'center', padding: '16px', background: '#FFFFFF', borderRadius: 12, border: '1px solid #E2E8F0' }}>
+            No emergency messages sent yet.
           </div>
         ) : (
           myMessages.map((msg, idx) => (
             <div
               key={idx}
               style={{
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border-card)',
+                background: '#FFFFFF',
+                border: '1px solid #E2E8F0',
                 borderRadius: 12,
-                padding: '10px 12px',
+                padding: '10px 14px',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 4
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-                <span style={{ fontFamily: 'monospace', color: '#38BDF8', fontWeight: 700 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                <span style={{ fontFamily: 'monospace', color: '#2563EB', fontWeight: 700 }}>
                   {msg.id}
                 </span>
-                <span style={{ color: '#94A3B8' }}>{msg.timeFormatted}</span>
+                <span style={{ color: '#64748B' }}>{msg.timeFormatted}</span>
               </div>
-              <div style={{ color: '#FFF', fontWeight: 600, fontSize: 13 }}>
+              <div style={{ color: '#0F172A', fontWeight: 600, fontSize: 14 }}>
                 "{msg.message}"
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#64748B' }}>
-                <span>Status: {msg.status}</span>
-                <span>Hops: {msg.hopCount}</span>
               </div>
             </div>
           ))

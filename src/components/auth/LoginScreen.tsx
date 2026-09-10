@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { cryptoService } from '../../services/cryptoService';
-import { Shield, Smartphone, Lock, User, Phone, CheckCircle } from 'lucide-react';
+import { Shield, Smartphone, Lock, User, Phone, CheckCircle2 } from 'lucide-react';
 import { UserAccount, UserRole } from '../../types';
+import { LanguageSelector } from '../common/LanguageSelector';
 
 export const LoginScreen: React.FC = () => {
-  const { login } = useApp();
+  const { login, t } = useApp();
   const [isRegistering, setIsRegistering] = useState(false);
 
   // Form states
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [phoneId, setPhoneId] = useState(() => cryptoService.getOrCreateDeviceId());
+  const [phoneId] = useState(() => cryptoService.getOrCreateDeviceId());
   const [emergencyContact, setEmergencyContact] = useState('');
   const [selectedRole, setSelectedRole] = useState<UserRole>('VICTIM');
 
@@ -23,7 +24,6 @@ export const LoginScreen: React.FC = () => {
       return;
     }
 
-    // Determine role or set defaults
     const detectedRole: UserRole = userId.toLowerCase().includes('rescue') || userId.toLowerCase().includes('admin')
       ? 'RESCUE_TEAM'
       : 'VICTIM';
@@ -40,8 +40,8 @@ export const LoginScreen: React.FC = () => {
 
   const handleRegisterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !userId.trim() || !password.trim()) {
-      alert('Please fill out all required fields');
+    if (!name.trim() || !userId.trim()) {
+      alert('Please fill out your name and User ID');
       return;
     }
 
@@ -56,11 +56,11 @@ export const LoginScreen: React.FC = () => {
     login(account);
   };
 
-  // Quick Hackathon Demo Logins
+  // Quick Demo Logins
   const quickLoginVictim = () => {
     login({
       userId: 'usr_subham_demo',
-      name: 'Subham (Victim)',
+      name: 'Subham (Civilian)',
       phoneId: 'DEV-A8F31C',
       role: 'VICTIM',
       emergencyContact: '+91 98765 43210'
@@ -77,117 +77,129 @@ export const LoginScreen: React.FC = () => {
   };
 
   return (
-    <div style={{
-      padding: '24px 20px',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'center',
-      minHeight: '100%',
-      gap: 20
-    }}>
+    <div
+      style={{
+        padding: '20px 18px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 16,
+        background: '#F8FAFC',
+        minHeight: '100%'
+      }}
+    >
       {/* Brand Header */}
-      <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-        <div style={{
-          width: 60,
-          height: 60,
-          borderRadius: 18,
-          background: 'radial-gradient(circle at 30% 30%, #EF4444, #991B1B)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 8px 25px rgba(239, 68, 68, 0.4)',
-          border: '2px solid rgba(255, 255, 255, 0.2)'
-        }}>
-          <Shield size={32} color="#FFF" />
+      <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, marginTop: 10 }}>
+        <div
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: 16,
+            background: '#2563EB',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#FFFFFF',
+            boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)'
+          }}
+        >
+          <Shield size={30} />
         </div>
-        <h1 style={{ fontSize: 26, fontWeight: 900, letterSpacing: 2, color: '#FFF' }}>
-          LIFELINE
+        <h1 style={{ fontSize: 24, fontWeight: 900, color: '#0F172A', letterSpacing: 0.5 }}>
+          {t('appName')}
         </h1>
-        <div style={{
-          fontSize: 10,
-          fontWeight: 800,
-          letterSpacing: 1.5,
-          color: '#94A3B8',
-          textTransform: 'uppercase'
-        }}>
-          Offline Disaster Rescue Network
+        <p style={{ fontSize: 13, color: '#64748B', fontWeight: 500 }}>
+          {t('appTagline')}
+        </p>
+
+        {/* Central Language Selector */}
+        <div style={{ marginTop: 6 }}>
+          <LanguageSelector compact />
         </div>
       </div>
 
       {/* Main Card */}
-      <div style={{
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border-card-highlight)',
-        borderRadius: 20,
-        padding: '20px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 16,
-        boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
-      }}>
+      <div
+        style={{
+          background: '#FFFFFF',
+          border: '1px solid #E2E8F0',
+          borderRadius: 20,
+          padding: '20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16,
+          boxShadow: '0 4px 14px rgba(0, 0, 0, 0.04)'
+        }}
+      >
         {!isRegistering ? (
           /* Login Form */
-          <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, color: '#FFF', textAlign: 'center' }}>
-              SECURE EMERGENCY ACCESS
+          <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', textAlign: 'center' }}>
+              {t('authTitle')}
             </div>
 
             <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 4, display: 'block' }}>
-                User ID
+              <label style={{ fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6, display: 'block' }}>
+                User ID / Name
               </label>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                background: 'rgba(0,0,0,0.3)',
-                border: '1px solid var(--border-card)',
-                borderRadius: 10,
-                padding: '0 12px'
-              }}>
-                <User size={16} color="#64748B" />
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: '#FFFFFF',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: 12,
+                  padding: '0 12px',
+                  height: 48
+                }}
+              >
+                <User size={18} color="#64748B" />
                 <input
                   type="text"
                   value={userId}
-                  onChange={e => setUserId(e.target.value)}
+                  onChange={(e) => setUserId(e.target.value)}
                   placeholder="e.g. subham or rescue_team"
                   style={{
                     flex: 1,
                     background: 'transparent',
                     border: 'none',
-                    padding: '10px 8px',
-                    color: '#FFF',
-                    fontSize: 13,
-                    outline: 'none'
+                    padding: '0 10px',
+                    color: '#0F172A',
+                    fontSize: 14,
+                    outline: 'none',
+                    fontWeight: 600
                   }}
                 />
               </div>
             </div>
 
             <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 4, display: 'block' }}>
-                Password
+              <label style={{ fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6, display: 'block' }}>
+                Password (Optional for emergency)
               </label>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                background: 'rgba(0,0,0,0.3)',
-                border: '1px solid var(--border-card)',
-                borderRadius: 10,
-                padding: '0 12px'
-              }}>
-                <Lock size={16} color="#64748B" />
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: '#FFFFFF',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: 12,
+                  padding: '0 12px',
+                  height: 48
+                }}
+              >
+                <Lock size={18} color="#64748B" />
                 <input
                   type="password"
                   value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   style={{
                     flex: 1,
                     background: 'transparent',
                     border: 'none',
-                    padding: '10px 8px',
-                    color: '#FFF',
-                    fontSize: 13,
+                    padding: '0 10px',
+                    color: '#0F172A',
+                    fontSize: 14,
                     outline: 'none'
                   }}
                 />
@@ -197,203 +209,149 @@ export const LoginScreen: React.FC = () => {
             <button
               type="submit"
               style={{
-                background: 'linear-gradient(135deg, #EF4444, #DC2626)',
+                height: 50,
+                background: '#2563EB',
                 border: 'none',
                 borderRadius: 12,
-                padding: '12px',
-                color: '#FFF',
-                fontWeight: 800,
-                fontSize: 14,
-                letterSpacing: 1,
+                color: '#FFFFFF',
+                fontWeight: 700,
+                fontSize: 15,
                 cursor: 'pointer',
-                marginTop: 6,
-                boxShadow: '0 4px 15px rgba(239,68,68,0.4)'
+                boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)'
               }}
             >
-              [ LOGIN ]
+              {t('continueBtn')}
             </button>
 
             <button
               type="button"
               onClick={() => setIsRegistering(true)}
               style={{
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid var(--border-card)',
+                height: 44,
+                background: '#F1F5F9',
+                border: '1px solid #CBD5E1',
                 borderRadius: 12,
-                padding: '10px',
-                color: '#38BDF8',
+                color: '#2563EB',
                 fontWeight: 700,
-                fontSize: 12,
+                fontSize: 13,
                 cursor: 'pointer'
               }}
             >
-              [ CREATE ACCOUNT ]
+              Create New Registration Profile
             </button>
           </form>
         ) : (
           /* Registration Form */
-          <form onSubmit={handleRegisterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, color: '#FFF', textAlign: 'center' }}>
-              CREATE RESCUE PROFILE
+          <form onSubmit={handleRegisterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', textAlign: 'center' }}>
+              {t('authTitle')}
+            </div>
+
+            {/* Role Cards */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div
+                onClick={() => setSelectedRole('VICTIM')}
+                style={{
+                  background: selectedRole === 'VICTIM' ? '#EFF6FF' : '#FFFFFF',
+                  border: `2px solid ${selectedRole === 'VICTIM' ? '#2563EB' : '#E2E8F0'}`,
+                  borderRadius: 14,
+                  padding: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  cursor: 'pointer'
+                }}
+              >
+                <Smartphone size={24} color={selectedRole === 'VICTIM' ? '#2563EB' : '#64748B'} />
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>{t('roleVictimTitle')}</div>
+                  <div style={{ fontSize: 12, color: '#64748B' }}>{t('roleVictimDesc')}</div>
+                </div>
+              </div>
+
+              <div
+                onClick={() => setSelectedRole('RESCUE_TEAM')}
+                style={{
+                  background: selectedRole === 'RESCUE_TEAM' ? '#EFF6FF' : '#FFFFFF',
+                  border: `2px solid ${selectedRole === 'RESCUE_TEAM' ? '#2563EB' : '#E2E8F0'}`,
+                  borderRadius: 14,
+                  padding: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  cursor: 'pointer'
+                }}
+              >
+                <Shield size={24} color={selectedRole === 'RESCUE_TEAM' ? '#2563EB' : '#64748B'} />
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>{t('roleRescueTitle')}</div>
+                  <div style={{ fontSize: 12, color: '#64748B' }}>{t('roleRescueDesc')}</div>
+                </div>
+              </div>
             </div>
 
             <div>
-              <label style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8' }}>Full Name *</label>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4, display: 'block' }}>
+                {t('enterName')} *
+              </label>
               <input
                 type="text"
                 value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="Subham Das"
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (!userId) setUserId(e.target.value.toLowerCase().replace(/\s+/g, '_'));
+                }}
+                placeholder={t('enterNamePlaceholder')}
                 style={{
                   width: '100%',
-                  background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid var(--border-card)',
-                  borderRadius: 8,
-                  padding: '8px 10px',
-                  color: '#FFF',
-                  fontSize: 12,
-                  outline: 'none'
+                  height: 46,
+                  background: '#FFFFFF',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: 10,
+                  padding: '0 12px',
+                  fontSize: 14,
+                  color: '#0F172A'
                 }}
               />
             </div>
 
             <div>
-              <label style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8' }}>User ID *</label>
-              <input
-                type="text"
-                value={userId}
-                onChange={e => setUserId(e.target.value)}
-                placeholder="subham_user"
-                style={{
-                  width: '100%',
-                  background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid var(--border-card)',
-                  borderRadius: 8,
-                  padding: '8px 10px',
-                  color: '#FFF',
-                  fontSize: 12,
-                  outline: 'none'
-                }}
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8' }}>Password *</label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
-                style={{
-                  width: '100%',
-                  background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid var(--border-card)',
-                  borderRadius: 8,
-                  padding: '8px 10px',
-                  color: '#FFF',
-                  fontSize: 12,
-                  outline: 'none'
-                }}
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8' }}>Device Identifier</label>
-              <input
-                type="text"
-                value={phoneId}
-                readOnly
-                style={{
-                  width: '100%',
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid var(--border-card)',
-                  borderRadius: 8,
-                  padding: '8px 10px',
-                  color: '#38BDF8',
-                  fontFamily: 'monospace',
-                  fontSize: 11,
-                  outline: 'none'
-                }}
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8' }}>Emergency Contact (Optional)</label>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4, display: 'block' }}>
+                {t('enterPhone')}
+              </label>
               <input
                 type="text"
                 value={emergencyContact}
-                onChange={e => setEmergencyContact(e.target.value)}
-                placeholder="+91 98765 43210"
+                onChange={(e) => setEmergencyContact(e.target.value)}
+                placeholder={t('enterPhonePlaceholder')}
                 style={{
                   width: '100%',
-                  background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid var(--border-card)',
-                  borderRadius: 8,
-                  padding: '8px 10px',
-                  color: '#FFF',
-                  fontSize: 12,
-                  outline: 'none'
+                  height: 46,
+                  background: '#FFFFFF',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: 10,
+                  padding: '0 12px',
+                  fontSize: 14,
+                  color: '#0F172A'
                 }}
               />
-            </div>
-
-            <div>
-              <label style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8' }}>Role Selection</label>
-              <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedRole('VICTIM')}
-                  style={{
-                    flex: 1,
-                    padding: '8px',
-                    borderRadius: 8,
-                    border: '1px solid',
-                    borderColor: selectedRole === 'VICTIM' ? '#EF4444' : 'var(--border-card)',
-                    background: selectedRole === 'VICTIM' ? 'rgba(239,68,68,0.2)' : 'transparent',
-                    color: '#FFF',
-                    fontWeight: 700,
-                    fontSize: 11,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Victim / Citizen
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedRole('RESCUE_TEAM')}
-                  style={{
-                    flex: 1,
-                    padding: '8px',
-                    borderRadius: 8,
-                    border: '1px solid',
-                    borderColor: selectedRole === 'RESCUE_TEAM' ? '#0284C7' : 'var(--border-card)',
-                    background: selectedRole === 'RESCUE_TEAM' ? 'rgba(2,132,199,0.2)' : 'transparent',
-                    color: '#FFF',
-                    fontWeight: 700,
-                    fontSize: 11,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Rescue Responder
-                </button>
-              </div>
             </div>
 
             <button
               type="submit"
               style={{
-                background: 'linear-gradient(135deg, #10B981, #059669)',
+                height: 50,
+                background: '#2563EB',
                 border: 'none',
-                borderRadius: 10,
-                padding: '10px',
-                color: '#FFF',
-                fontWeight: 800,
-                fontSize: 13,
+                borderRadius: 12,
+                color: '#FFFFFF',
+                fontWeight: 700,
+                fontSize: 15,
                 cursor: 'pointer',
-                marginTop: 6
+                marginTop: 4
               }}
             >
-              COMPLETE REGISTRATION
+              {t('continueBtn')}
             </button>
 
             <button
@@ -402,61 +360,52 @@ export const LoginScreen: React.FC = () => {
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: '#94A3B8',
-                fontSize: 11,
+                color: '#64748B',
+                fontSize: 13,
+                fontWeight: 600,
                 cursor: 'pointer'
               }}
             >
-              ← Back to Login
+              ← Back to Sign In
             </button>
           </form>
         )}
 
-        {/* 1-Click Fast Demo Accounts for Hackathon Judges */}
-        <div style={{
-          borderTop: '1px solid var(--border-card)',
-          paddingTop: 12,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 6
-        }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textAlign: 'center', textTransform: 'uppercase' }}>
-            ⚡ Hackathon One-Click Demo Logins:
+        {/* Quick Demo Options */}
+        <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', textAlign: 'center' }}>
+            Quick Demo Access:
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <button
-              type="button"
               onClick={quickLoginVictim}
               style={{
-                background: 'rgba(239, 68, 68, 0.12)',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                color: '#FCA5A5',
-                padding: '8px',
-                borderRadius: 8,
-                fontSize: 11,
+                height: 40,
+                background: '#F1F5F9',
+                border: '1px solid #CBD5E1',
+                borderRadius: 10,
+                fontSize: 12,
                 fontWeight: 700,
+                color: '#0F172A',
                 cursor: 'pointer'
               }}
             >
-              Victim (Citizen)
+              Civilian Mode
             </button>
-
             <button
-              type="button"
               onClick={quickLoginRescue}
               style={{
-                background: 'rgba(2, 132, 199, 0.12)',
-                border: '1px solid rgba(2, 132, 199, 0.3)',
-                color: '#BAE6FD',
-                padding: '8px',
-                borderRadius: 8,
-                fontSize: 11,
+                height: 40,
+                background: '#EFF6FF',
+                border: '1px solid #BFDBFE',
+                borderRadius: 10,
+                fontSize: 12,
                 fontWeight: 700,
+                color: '#2563EB',
                 cursor: 'pointer'
               }}
             >
-              Rescue Team
+              Rescuer Mode
             </button>
           </div>
         </div>

@@ -22,9 +22,13 @@ import { BleMeshTransport } from '../transport/bleMeshTransport';
 import { Capacitor } from '@capacitor/core';
 import { DEMO_STEPS } from '../services/demoRunner';
 import confetti from 'canvas-confetti';
+import { translations, LanguageCode } from '../i18n/translations';
 
 
 interface AppContextType {
+  language: LanguageCode;
+  setLanguage: (lang: LanguageCode) => void;
+  t: (key: string) => string;
   user: UserAccount | null;
   role: UserRole;
   setRole: (role: UserRole) => void;
@@ -209,6 +213,14 @@ async function getDeviceBatteryLevel(): Promise<number> {
 }
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  // Localization state (defaults to English 'en')
+  const [language, setLanguage] = useState<LanguageCode>('en');
+
+  const t = useCallback((key: string): string => {
+    const langDict = translations[language] || translations['en'];
+    return langDict[key] || translations['en'][key] || key;
+  }, [language]);
+
   // Current user / role - defaults to PERSON-A
   const [user, setUser] = useState<UserAccount | null>({
     userId: 'PERSON-A',
@@ -717,6 +729,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   return (
     <AppContext.Provider
       value={{
+        language,
+        setLanguage,
+        t,
         user: effectiveUser,
         role,
         setRole,

@@ -3,53 +3,53 @@ import { useApp } from '../../context/AppContext';
 import { WifiOff, Wifi, Radio, Navigation, BatteryCharging } from 'lucide-react';
 
 export const HardwareStatusStrip: React.FC = () => {
-  const { isInternetDown, meshStatus, location, setIsInternetDown } = useApp();
+  const { isInternetDown, meshStatus, location, setIsInternetDown, t } = useApp();
 
   return (
     <div className="hardware-status-strip">
       {/* Cellular / Internet status */}
-      <div 
-        className="status-pill cursor-pointer" 
+      <div
+        className="hardware-pill"
         onClick={() => setIsInternetDown(!isInternetDown)}
-        title="Click to toggle Internet/Cellular connection"
+        title="Tap to toggle cellular simulation"
         style={{ cursor: 'pointer' }}
       >
         {isInternetDown ? (
           <>
-            <WifiOff size={13} color="#EF4444" />
-            <span style={{ color: '#EF4444' }}>NET: OFF</span>
+            <WifiOff size={14} color="#DC2626" />
+            <span style={{ color: '#DC2626' }}>{t('statusInternetOff')}</span>
           </>
         ) : (
           <>
-            <Wifi size={13} color="#10B981" />
-            <span style={{ color: '#10B981' }}>NET: 4G</span>
+            <Wifi size={14} color="#16A34A" />
+            <span style={{ color: '#16A34A' }}>{t('statusInternetOn')}</span>
           </>
         )}
       </div>
 
       {/* GPS Status */}
-      <div className="status-pill">
-        <Navigation size={13} color="#10B981" />
-        <span style={{ color: '#10B981' }}>GPS ±{location.accuracy}m</span>
+      <div className="hardware-pill">
+        <Navigation size={14} color="#16A34A" />
+        <span style={{ color: '#0F172A' }}>GPS ±{location.accuracy}m</span>
       </div>
 
       {/* Mesh Radio Status */}
-      <div className="status-pill">
-        <Radio 
-          size={13} 
-          color={meshStatus === 'CONNECTED' ? '#10B981' : meshStatus === 'SEARCHING' ? '#F59E0B' : '#EF4444'} 
+      <div className="hardware-pill">
+        <Radio
+          size={14}
+          color={meshStatus === 'CONNECTED' ? '#16A34A' : meshStatus === 'SEARCHING' ? '#D97706' : '#DC2626'}
         />
         <span style={{
-          color: meshStatus === 'CONNECTED' ? '#10B981' : meshStatus === 'SEARCHING' ? '#F59E0B' : '#EF4444'
+          color: meshStatus === 'CONNECTED' ? '#16A34A' : meshStatus === 'SEARCHING' ? '#D97706' : '#DC2626'
         }}>
-          MESH: {meshStatus}
+          {t('statusMeshReady')}
         </span>
       </div>
 
       {/* Battery */}
-      <div className="status-pill" style={{ opacity: 0.8 }}>
-        <BatteryCharging size={13} color="#94A3B8" />
-        <span>79%</span>
+      <div className="hardware-pill">
+        <BatteryCharging size={14} color="#64748B" />
+        <span>85%</span>
       </div>
     </div>
   );

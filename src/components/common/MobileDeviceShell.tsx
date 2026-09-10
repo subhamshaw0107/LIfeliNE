@@ -7,18 +7,18 @@ import { TacticalMap } from '../map/TacticalMap';
 import { RescueDashboard } from '../rescue/RescueDashboard';
 import { LoginScreen } from '../auth/LoginScreen';
 import { RedZoneEmergencyModal } from './RedZoneEmergencyModal';
+import { LanguageSelector } from './LanguageSelector';
 import {
   Home,
   Map,
   MessageSquare,
-  AlertOctagon,
-  Settings,
+  AlertTriangle,
   Radio,
-  ShieldCheck,
+  User,
   LogOut,
   RefreshCw,
   Smartphone,
-  ShieldAlert
+  Shield
 } from 'lucide-react';
 
 interface Props {
@@ -26,11 +26,11 @@ interface Props {
   deviceTitle?: string;
 }
 
-type VictimTab = 'HOME' | 'MESH' | 'MAP' | 'MESSAGES' | 'SOS' | 'PROFILE';
-type RescueTab = 'DASHBOARD' | 'MAP' | 'SOS' | 'MESH';
+type VictimTab = 'HOME' | 'MESH' | 'MAP' | 'MESSAGES' | 'PROFILE';
+type RescueTab = 'DASHBOARD' | 'MAP' | 'MESH';
 
-export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle }) => {
-  const { user, role: contextRole, setRole, logout, syncPending, syncWithCloud, redZoneSosPopup, setRedZoneSosPopup } = useApp();
+export const MobileDeviceShell: React.FC<Props> = ({ forcedRole }) => {
+  const { user, role: contextRole, setRole, logout, syncPending, syncWithCloud, redZoneSosPopup, setRedZoneSosPopup, t } = useApp();
   const activeRole = forcedRole || contextRole;
 
   // Active Tab states
@@ -45,25 +45,22 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle }) 
   });
 
   React.useEffect(() => {
-    const t = setInterval(() => {
+    const interval = setInterval(() => {
       const d = new Date();
       setTimeStr(`${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`);
     }, 10000);
-    return () => clearInterval(t);
+    return () => clearInterval(interval);
   }, []);
 
   if (!user) {
     return (
       <div className="smartphone-chassis">
-        <div className="phone-top-bar">
+        <div className="phone-status-bar">
           <span>{timeStr}</span>
-          <div className="phone-dynamic-island">
-            <div className="island-camera-lens"></div>
-            <div className="island-sensor"></div>
-          </div>
-          <span>5G • 88%</span>
+          <div className="phone-dynamic-island" />
+          <span style={{ fontSize: 11, color: '#475569' }}>94%</span>
         </div>
-        <div className="phone-screen-content" style={{ paddingBottom: 0 }}>
+        <div className="mobile-screen-body" style={{ paddingBottom: 0 }}>
           <LoginScreen />
         </div>
       </div>
@@ -72,58 +69,59 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle }) 
 
   return (
     <div className="smartphone-chassis">
-      {/* Phone Hardware Top Status Bar */}
-      <div className="phone-top-bar">
+      {/* Phone Status Bar */}
+      <div className="phone-status-bar">
         <span>{timeStr}</span>
-        <div className="phone-dynamic-island">
-          <div className="island-camera-lens"></div>
-          <div className="island-sensor"></div>
-        </div>
+        <div className="phone-dynamic-island" />
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {syncPending && (
-            <RefreshCw size={11} className="animate-spin" color="#38BDF8" />
-          )}
-          <span style={{ fontSize: 10, fontFamily: 'monospace' }}>
-            {activeRole === 'VICTIM' ? 'DEV-A8F31C' : 'TACTICAL-HQ'}
-          </span>
+          {syncPending && <RefreshCw size={12} color="#2563EB" style={{ animation: 'spin 1s linear infinite' }} />}
+          <span style={{ fontSize: 11, color: '#475569' }}>94%</span>
         </div>
       </div>
 
-      {/* Top Role Switcher Header inside Mobile Section */}
+      {/* Role Switcher Pill Bar (Top of Phone Screen) */}
       {!forcedRole && (
-        <div className="phone-role-switcher-bar">
-          <div className="role-switcher-group">
+        <div
+          style={{
+            background: '#FFFFFF',
+            borderBottom: '1px solid #E2E8F0',
+            padding: '8px 12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}
+        >
+          <div className="role-switcher-group" style={{ flex: 1 }}>
             <button
-              className={`role-tab-btn ${activeRole === 'VICTIM' ? 'active' : ''}`}
+              className={`role-switch-btn ${activeRole === 'VICTIM' ? 'active' : ''}`}
               onClick={() => setRole('VICTIM')}
+              style={{ flex: 1, justifyContent: 'center' }}
             >
-              <Smartphone size={13} />
-              <span>Victim Phone</span>
+              <Smartphone size={14} />
+              <span>{t('roleVictimTitle')}</span>
             </button>
             <button
-              className={`role-tab-btn rescue ${activeRole === 'RESCUE_TEAM' ? 'active rescue' : ''}`}
+              className={`role-switch-btn ${activeRole === 'RESCUE_TEAM' ? 'active' : ''}`}
               onClick={() => setRole('RESCUE_TEAM')}
+              style={{ flex: 1, justifyContent: 'center' }}
             >
-              <ShieldAlert size={13} />
-              <span>Rescue Center</span>
+              <Shield size={14} />
+              <span>{t('roleRescueTitle')}</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* Screen Body */}
-      <div className="phone-screen-content">
+      {/* Screen Content Body */}
+      <div className="mobile-screen-body">
         {activeRole === 'VICTIM' ? (
-          /* ================= VICTIM SCREENS ================= */
+          /* CIVILIAN / VICTIM VIEWS */
           victimTab === 'HOME' ? (
             <VictimHome
               onNavigateToMap={() => setVictimTab('MAP')}
               onNavigateToMessages={() => setVictimTab('MESSAGES')}
               onNavigateToMesh={() => setVictimTab('MESH')}
-              onInspectPacket={(id) => {
-                setInspectedSosId(id);
-                setVictimTab('SOS');
-              }}
+              onInspectPacket={() => setVictimTab('HOME')}
             />
           ) : victimTab === 'MESH' ? (
             <MeshRadar onBack={() => setVictimTab('HOME')} />
@@ -131,42 +129,52 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle }) 
             <TacticalMap isRescueView={false} />
           ) : victimTab === 'MESSAGES' ? (
             <EmergencyChat onBack={() => setVictimTab('HOME')} />
-          ) : victimTab === 'SOS' ? (
-            <VictimHome
-              onNavigateToMap={() => setVictimTab('MAP')}
-              onNavigateToMessages={() => setVictimTab('MESSAGES')}
-              onNavigateToMesh={() => setVictimTab('MESH')}
-            />
           ) : (
-            /* Profile & System Info */
-            <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <h2 style={{ fontSize: 20, fontWeight: 900, color: '#FFF' }}>⚙ VICTIM PROFILE</h2>
-              <div style={{
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border-card)',
-                borderRadius: 14,
-                padding: '14px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 8,
-                fontSize: 12
-              }}>
-                <div>Name: <strong style={{ color: '#FFF' }}>{user.name}</strong></div>
-                <div>User ID: <strong style={{ color: '#FFF' }}>{user.userId}</strong></div>
-                <div>Device ID: <strong style={{ color: '#38BDF8', fontFamily: 'monospace' }}>{user.phoneId}</strong></div>
-                <div>Emergency Contact: <strong style={{ color: '#FFF' }}>{user.emergencyContact || 'None listed'}</strong></div>
+            /* Account Info View */
+            <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 800, color: '#0F172A' }}>{t('navProfile')}</h2>
+
+              <div
+                style={{
+                  background: '#FFFFFF',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: 16,
+                  padding: 16,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
+                }}
+              >
+                <div>
+                  <span style={{ fontSize: 12, color: '#64748B' }}>Name:</span>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: '#0F172A' }}>{user.name}</div>
+                </div>
+                <div>
+                  <span style={{ fontSize: 12, color: '#64748B' }}>User ID:</span>
+                  <div style={{ fontSize: 14, fontFamily: 'monospace', color: '#2563EB', fontWeight: 700 }}>{user.userId}</div>
+                </div>
+                <div>
+                  <span style={{ fontSize: 12, color: '#64748B' }}>Phone / Emergency Contact:</span>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>{user.emergencyContact || 'Not provided'}</div>
+                </div>
+              </div>
+
+              <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 16, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{t('language')}</span>
+                <LanguageSelector />
               </div>
 
               <button
                 onClick={syncWithCloud}
                 style={{
-                  background: 'rgba(56, 189, 248, 0.15)',
-                  border: '1px solid rgba(56, 189, 248, 0.3)',
-                  color: '#38BDF8',
-                  padding: '12px',
+                  height: 48,
+                  background: '#EFF6FF',
+                  border: '1px solid #BFDBFE',
+                  color: '#2563EB',
                   borderRadius: 12,
                   fontWeight: 700,
-                  fontSize: 13,
+                  fontSize: 14,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -174,20 +182,20 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle }) 
                   gap: 8
                 }}
               >
-                <RefreshCw size={15} />
-                <span>{syncPending ? 'Syncing...' : 'Sync Stored Data to Cloud'}</span>
+                <RefreshCw size={16} />
+                <span>{syncPending ? 'Syncing Data...' : 'Sync Data Offline/Cloud'}</span>
               </button>
 
               <button
                 onClick={logout}
                 style={{
-                  background: 'rgba(239, 68, 68, 0.15)',
-                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                  color: '#EF4444',
-                  padding: '12px',
+                  height: 48,
+                  background: '#FEF2F2',
+                  border: '1px solid #FECACA',
+                  color: '#DC2626',
                   borderRadius: 12,
                   fontWeight: 700,
-                  fontSize: 13,
+                  fontSize: 14,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -195,13 +203,13 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle }) 
                   gap: 8
                 }}
               >
-                <LogOut size={15} />
-                <span>Switch Account / Logout</span>
+                <LogOut size={16} />
+                <span>{t('switchRole')} / Logout</span>
               </button>
             </div>
           )
         ) : (
-          /* ================= RESCUE TEAM SCREENS ================= */
+          /* RESCUER VIEWS */
           rescueTab === 'DASHBOARD' ? (
             <RescueDashboard
               onNavigateToMap={() => setRescueTab('MAP')}
@@ -216,10 +224,6 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle }) 
                 setRescueTab('DASHBOARD');
               }}
             />
-          ) : rescueTab === 'SOS' ? (
-            <RescueDashboard
-              onNavigateToMap={() => setRescueTab('MAP')}
-            />
           ) : (
             <MeshRadar />
           )
@@ -227,106 +231,106 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle }) 
       </div>
 
       {/* Bottom Navigation Bar */}
-      <div className="phone-bottom-nav">
+      <div className="bottom-nav-bar">
         {activeRole === 'VICTIM' ? (
-          /* Victim Navigation: Home | Map | Messages | SOS | Profile */
           <>
             <button
-              className={`nav-item-btn ${victimTab === 'HOME' ? 'active' : ''}`}
+              className={`nav-tab-btn ${victimTab === 'HOME' ? 'active' : ''}`}
               onClick={() => setVictimTab('HOME')}
             >
-              <Home size={18} />
-              <span>Home</span>
+              <div className="nav-icon-box">
+                <Home size={20} />
+              </div>
+              <span>{t('navHome')}</span>
             </button>
 
             <button
-              className={`nav-item-btn ${victimTab === 'MESH' ? 'active' : ''}`}
-              onClick={() => setVictimTab('MESH')}
-            >
-              <Radio size={18} />
-              <span>Mesh</span>
-            </button>
-
-            <button
-              className={`nav-item-btn ${victimTab === 'SOS' ? 'active sos-glow' : 'sos-glow'}`}
-              onClick={() => setVictimTab('HOME')}
-            >
-              <AlertOctagon size={20} color="#EF4444" />
-              <span style={{ color: '#EF4444', fontWeight: 800 }}>SOS</span>
-            </button>
-
-            <button
-              className={`nav-item-btn ${victimTab === 'MAP' ? 'active' : ''}`}
+              className={`nav-tab-btn ${victimTab === 'MAP' ? 'active' : ''}`}
               onClick={() => setVictimTab('MAP')}
             >
-              <Map size={18} />
-              <span>Map</span>
+              <div className="nav-icon-box">
+                <Map size={20} />
+              </div>
+              <span>{t('navMap')}</span>
             </button>
 
             <button
-              className={`nav-item-btn ${victimTab === 'MESSAGES' ? 'active' : ''}`}
+              className={`nav-tab-btn ${victimTab === 'MESSAGES' ? 'active' : ''}`}
               onClick={() => setVictimTab('MESSAGES')}
             >
-              <MessageSquare size={18} />
-              <span>Messages</span>
+              <div className="nav-icon-box">
+                <MessageSquare size={20} />
+              </div>
+              <span>{t('navChat')}</span>
+            </button>
+
+            <button
+              className={`nav-tab-btn ${victimTab === 'MESH' ? 'active' : ''}`}
+              onClick={() => setVictimTab('MESH')}
+            >
+              <div className="nav-icon-box">
+                <Radio size={20} />
+              </div>
+              <span>{t('navRadar')}</span>
+            </button>
+
+            <button
+              className={`nav-tab-btn ${victimTab === 'PROFILE' ? 'active' : ''}`}
+              onClick={() => setVictimTab('PROFILE')}
+            >
+              <div className="nav-icon-box">
+                <User size={20} />
+              </div>
+              <span>{t('navProfile')}</span>
             </button>
           </>
         ) : (
-          /* Rescue Team Navigation: Dashboard | Live Map | SOS | Mesh | Victims */
           <>
             <button
-              className={`nav-item-btn ${rescueTab === 'DASHBOARD' ? 'active' : ''}`}
+              className={`nav-tab-btn ${rescueTab === 'DASHBOARD' ? 'active' : ''}`}
               onClick={() => setRescueTab('DASHBOARD')}
             >
-              <Home size={18} />
-              <span>Dashboard</span>
+              <div className="nav-icon-box">
+                <Home size={20} />
+              </div>
+              <span>{t('navDashboard')}</span>
             </button>
 
             <button
-              className={`nav-item-btn ${rescueTab === 'MAP' ? 'active' : ''}`}
+              className={`nav-tab-btn ${rescueTab === 'MAP' ? 'active' : ''}`}
               onClick={() => setRescueTab('MAP')}
             >
-              <Map size={18} />
-              <span>Live Map</span>
+              <div className="nav-icon-box">
+                <Map size={20} />
+              </div>
+              <span>{t('navMap')}</span>
             </button>
 
             <button
-              className={`nav-item-btn ${rescueTab === 'SOS' ? 'active sos-glow' : 'sos-glow'}`}
-              onClick={() => setRescueTab('DASHBOARD')}
-            >
-              <AlertOctagon size={20} color="#EF4444" />
-              <span style={{ color: '#EF4444', fontWeight: 800 }}>SOS Queue</span>
-            </button>
-
-            <button
-              className={`nav-item-btn ${rescueTab === 'MESH' ? 'active' : ''}`}
+              className={`nav-tab-btn ${rescueTab === 'MESH' ? 'active' : ''}`}
               onClick={() => setRescueTab('MESH')}
             >
-              <Radio size={18} />
-              <span>Mesh</span>
+              <div className="nav-icon-box">
+                <Radio size={20} />
+              </div>
+              <span>{t('navRadar')}</span>
             </button>
           </>
         )}
       </div>
 
-      {/* Emergency Red Area SOS Alert Popup Modal */}
+      {/* Emergency Red Area SOS Alert Modal */}
       {redZoneSosPopup && (
         <RedZoneEmergencyModal
           packet={redZoneSosPopup}
           onClose={() => setRedZoneSosPopup(null)}
           onViewOnMap={() => {
-            if (activeRole === 'VICTIM') {
-              setVictimTab('MAP');
-            } else {
-              setRescueTab('MAP');
-            }
+            if (activeRole === 'VICTIM') setVictimTab('MAP');
+            else setRescueTab('MAP');
           }}
           onViewMesh={() => {
-            if (activeRole === 'VICTIM') {
-              setVictimTab('MESH');
-            } else {
-              setRescueTab('MESH');
-            }
+            if (activeRole === 'VICTIM') setVictimTab('MESH');
+            else setRescueTab('MESH');
           }}
         />
       )}

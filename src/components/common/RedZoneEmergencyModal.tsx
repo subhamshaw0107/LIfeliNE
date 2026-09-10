@@ -24,216 +24,133 @@ export const RedZoneEmergencyModal: React.FC<Props> = ({
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.85)',
-        backdropFilter: 'blur(8px)',
+        backgroundColor: 'rgba(15, 23, 42, 0.6)',
         zIndex: 9999,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '16px',
-        animation: 'fadeIn 0.25s ease-out'
+        padding: '16px'
       }}
     >
       <div
         style={{
           width: '100%',
           maxWidth: '420px',
-          background: 'linear-gradient(180deg, #1C0B0B 0%, #111827 100%)',
-          border: '2px solid #EF4444',
-          borderRadius: '16px',
-          boxShadow: '0 0 35px rgba(239, 68, 68, 0.5), inset 0 0 15px rgba(239, 68, 68, 0.2)',
+          background: '#FFFFFF',
+          border: '2px solid #DC2626',
+          borderRadius: '20px',
+          boxShadow: '0 16px 40px rgba(0, 0, 0, 0.15)',
           overflow: 'hidden',
           display: 'flex',
-          flexDirection: 'column',
-          position: 'relative'
+          flexDirection: 'column'
         }}
       >
         {/* Top Emergency Beacon Bar */}
         <div
           style={{
-            background: '#EF4444',
+            background: '#DC2626',
             color: '#FFFFFF',
-            padding: '10px 14px',
+            padding: '12px 16px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 18, animation: 'pulse 1s infinite' }}>🚨</span>
-            <span style={{ fontWeight: 900, fontSize: 13, letterSpacing: '0.05em' }}>
-              RED DANGER ZONE SOS ALERT
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 900, fontSize: 15 }}>
+            <ShieldAlert size={20} />
+            <span>RED ZONE EMERGENCY ALERT</span>
           </div>
           <button
             onClick={onClose}
             style={{
-              background: 'rgba(0,0,0,0.25)',
+              background: 'transparent',
               border: 'none',
-              borderRadius: '50%',
-              width: 26,
-              height: 26,
-              color: '#FFF',
+              color: '#FFFFFF',
+              cursor: 'pointer',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer'
+              alignItems: 'center'
             }}
           >
-            <X size={16} />
+            <X size={20} />
           </button>
         </div>
 
         {/* Modal Body */}
-        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Main Warning Box */}
-          <div
-            style={{
-              background: 'rgba(239, 68, 68, 0.15)',
-              border: '1px solid rgba(239, 68, 68, 0.4)',
-              borderRadius: 12,
-              padding: '12px',
-              display: 'flex',
-              gap: 10
-            }}
-          >
-            <ShieldAlert size={26} color="#EF4444" style={{ flexShrink: 0, marginTop: 2 }} />
-            <div>
-              <div style={{ color: '#EF4444', fontWeight: 800, fontSize: 13 }}>
-                VICTIM IN CRITICAL RED DISASTER ZONE
-              </div>
-              <div style={{ color: '#FCA5A5', fontSize: 11, marginTop: 2, lineHeight: 1.4 }}>
-                An emergency SOS has been initiated from inside an active <strong>RED Disaster Zone</strong> ({packet.disasterZoneName}). Priority automatically elevated to <strong>CRITICAL</strong>.
-              </div>
-            </div>
+        <div style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: '#DC2626', background: '#FEF2F2', padding: '4px 10px', borderRadius: 8 }}>
+              HIGH PRIORITY DISASTER
+            </span>
+            <span style={{ fontSize: 12, color: '#64748B', fontWeight: 600 }}>{packet.timeFormatted}</span>
           </div>
 
-          {/* Telemetry Details Grid */}
-          <div
-            style={{
-              background: 'rgba(255, 255, 255, 0.04)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: 12,
-              padding: '12px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-              fontSize: 12
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#94A3B8' }}>SOS Identifier:</span>
-              <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#38BDF8', fontSize: 13 }}>
-                {packet.id}
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#94A3B8' }}>Sender ID:</span>
-              <span style={{ fontWeight: 800, color: '#F8FAFC', background: 'rgba(56, 189, 248, 0.15)', padding: '2px 8px', borderRadius: 4 }}>
-                {packet.senderId || 'PERSON-A'}
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#94A3B8' }}>Calculated Priority:</span>
-              <span style={{ background: '#EF4444', color: '#FFF', fontWeight: 800, fontSize: 11, padding: '2px 8px', borderRadius: 4 }}>
-                🔴 {packet.priority}
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#94A3B8' }}>Hazard Proximity:</span>
-              <span style={{ color: '#EF4444', fontWeight: 700 }}>
-                {packet.distanceFromDisasterKm} km from Flood Core
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#94A3B8' }}>GPS Coordinates:</span>
-              <span style={{ fontFamily: 'monospace', color: '#CBD5E1' }}>
-                {packet.latitude.toFixed(4)}, {packet.longitude.toFixed(4)}
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#94A3B8' }}>Message:</span>
-              <span style={{ color: '#FFF', fontStyle: 'italic', fontWeight: 600 }}>
-                "{packet.message}"
-              </span>
-            </div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A' }}>
+            Victim: {packet.senderId || packet.userId}
           </div>
 
-          {/* Action Buttons */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+          <div style={{ fontSize: 14, color: '#334155', background: '#F8FAFC', padding: '12px', borderRadius: 12, border: '1px solid #E2E8F0', fontStyle: 'italic' }}>
+            "{packet.message || 'Emergency assistance needed in red zone.'}"
+          </div>
+
+          <div style={{ fontSize: 13, color: '#475569', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div>Location: <strong>{packet.disasterZoneName || 'Flood Zone A'}</strong></div>
+            <div>Distance from Base: <strong>{packet.distanceFromRescueKm} km</strong></div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
             {onViewOnMap && (
               <button
                 onClick={() => {
-                  onClose();
                   onViewOnMap();
+                  onClose();
                 }}
                 style={{
-                  background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)',
+                  flex: 1,
+                  height: 46,
+                  background: '#2563EB',
                   border: 'none',
+                  borderRadius: 12,
                   color: '#FFFFFF',
-                  padding: '10px 14px',
-                  borderRadius: 10,
-                  fontSize: 12,
-                  fontWeight: 800,
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: 8,
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 14px rgba(239, 68, 68, 0.4)'
+                  gap: 6
                 }}
               >
                 <MapPin size={16} />
-                <span>VIEW LIVE GOOGLE MAP (RED & GREEN ZONES)</span>
+                <span>View on Map</span>
               </button>
             )}
 
             {onViewMesh && (
               <button
                 onClick={() => {
-                  onClose();
                   onViewMesh();
+                  onClose();
                 }}
                 style={{
-                  background: 'rgba(56, 189, 248, 0.12)',
-                  border: '1px solid rgba(56, 189, 248, 0.3)',
-                  color: '#38BDF8',
-                  padding: '8px 14px',
-                  borderRadius: 10,
-                  fontSize: 12,
+                  flex: 1,
+                  height: 46,
+                  background: '#F1F5F9',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: 12,
+                  color: '#0F172A',
                   fontWeight: 700,
+                  fontSize: 13,
+                  cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: 6,
-                  cursor: 'pointer'
+                  gap: 6
                 }}
               >
-                <Radio size={15} />
-                <span>TRACK STORE-CARRY-FORWARD MESH HOPS</span>
+                <Radio size={16} />
+                <span>Mesh Hops</span>
               </button>
             )}
-
-            <button
-              onClick={onClose}
-              style={{
-                background: 'rgba(255, 255, 255, 0.06)',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                color: '#94A3B8',
-                padding: '8px 14px',
-                borderRadius: 10,
-                fontSize: 11,
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-            >
-              Dismiss Alert & Continue
-            </button>
           </div>
         </div>
       </div>
