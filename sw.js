@@ -1,15 +1,20 @@
 // Lifeline Offline Disaster Rescue Service Worker
-const CACHE_NAME = 'lifeline-offline-v4';
+// Scope-aware: works under any base path (root or /LIfeliNE/)
+const CACHE_NAME = 'lifeline-offline-v5';
+const BASE_PATH = self.registration.scope.replace(/\/$/, '');
+
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json'
+  BASE_PATH + '/',
+  BASE_PATH + '/index.html',
+  BASE_PATH + '/manifest.json'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
+      return cache.addAll(STATIC_ASSETS).catch(() => {
+        // Silently ignore if some assets are unavailable at install time
+      });
     })
   );
   self.skipWaiting();
@@ -35,18 +40,23 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  // Network-First for HTML navigation requests so users always get the latest deployed assets
+  // Network-First for HTML navigation — always get latest deployed assets
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
           if (response && response.status === 200) {
             const responseClone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', responseClone));
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(BASE_PATH + '/index.html', responseClone);
+            });
           }
           return response;
         })
-        .catch(() => caches.match('/index.html'))
+        .catch(() => {
+          return caches.match(BASE_PATH + '/index.html')
+            .then(r => r || caches.match('/index.html'));
+        })
     );
     return;
   }
@@ -58,14 +68,12 @@ self.addEventListener('fetch', (event) => {
         return cachedResponse;
       }
       return fetch(event.request).then((networkResponse) => {
-        // Cache successful static asset responses
         if (networkResponse && networkResponse.status === 200 && url.origin === location.origin) {
           const responseClone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
         }
         return networkResponse;
       }).catch(() => {
-        // Return empty or cached fallback if available
         return caches.match(event.request);
       });
     })
