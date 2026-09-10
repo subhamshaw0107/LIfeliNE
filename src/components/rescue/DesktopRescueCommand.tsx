@@ -19,8 +19,10 @@ import {
   RefreshCw,
   AlertTriangle,
   Wifi,
-  Navigation
+  Navigation,
+  LogOut
 } from 'lucide-react';
+import { LogoutConfirmModal } from '../common/LogoutConfirmModal';
 
 interface Props {
   onSwitchToPhoneView?: () => void;
@@ -31,6 +33,8 @@ type FilterOption = 'ALL' | 'CRITICAL' | 'HIGH' | 'RESCUED';
 
 export const DesktopRescueCommand: React.FC<Props> = ({ onSwitchToPhoneView }) => {
   const {
+    user,
+    logout,
     sosList,
     meshNodes,
     acknowledgeSos,
@@ -46,6 +50,7 @@ export const DesktopRescueCommand: React.FC<Props> = ({ onSwitchToPhoneView }) =
   const [filterOption, setFilterOption] = useState<FilterOption>('ALL');
   const [inspectingPacket, setInspectingPacket] = useState<SosPacket | null>(null);
   const [selectedMapSosId, setSelectedMapSosId] = useState<string | null>(null);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   // Metrics
   const metrics = useMemo(() => {
@@ -147,6 +152,15 @@ export const DesktopRescueCommand: React.FC<Props> = ({ onSwitchToPhoneView }) =
           >
             <RefreshCw size={14} className={syncPending ? 'animate-spin' : ''} />
             <span>{syncPending ? 'Syncing...' : 'Sync Gateway'}</span>
+          </button>
+          <button
+            onClick={() => setShowLogoutModal(true)}
+            className="hq-sync-btn"
+            style={{ borderColor: 'rgba(239, 68, 68, 0.4)', color: '#FCA5A5' }}
+            title="Log out of Incident Command"
+          >
+            <LogOut size={14} />
+            <span>Logout</span>
           </button>
         </div>
       </header>
@@ -397,6 +411,16 @@ export const DesktopRescueCommand: React.FC<Props> = ({ onSwitchToPhoneView }) =
           }}
         />
       )}
+
+      {/* Logout Confirmation Modal */}
+      <LogoutConfirmModal
+        isOpen={showLogoutModal}
+        onCancel={() => setShowLogoutModal(false)}
+        onConfirm={() => {
+          setShowLogoutModal(false);
+          logout();
+        }}
+      />
     </div>
   );
 };
