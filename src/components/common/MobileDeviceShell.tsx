@@ -6,6 +6,9 @@ import { MeshRadar } from '../victim/MeshRadar';
 import { TacticalMap } from '../map/TacticalMap';
 import { RescueDashboard } from '../rescue/RescueDashboard';
 import { LoginScreen } from '../auth/LoginScreen';
+import { SplashScreen } from '../splash/SplashScreen';
+import { BluetoothWifiPermissionModal } from './BluetoothWifiPermissionModal';
+import { LanguageSelectionScreen } from './LanguageSelectionScreen';
 import { RedZoneEmergencyModal } from './RedZoneEmergencyModal';
 import {
   Home,
@@ -24,25 +27,43 @@ import {
 interface Props {
   forcedRole?: 'VICTIM' | 'RESCUE_TEAM';
   deviceTitle?: string;
+  triggerSplash?: boolean;
 }
 
 type VictimTab = 'HOME' | 'MESH' | 'MAP' | 'MESSAGES' | 'SOS' | 'PROFILE';
 type RescueTab = 'DASHBOARD' | 'MAP' | 'SOS' | 'MESH';
 
-export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle }) => {
-  const { user, role: contextRole, setRole, logout, syncPending, syncWithCloud, redZoneSosPopup, setRedZoneSosPopup } = useApp();
-  const activeRole = forcedRole || contextRole;
+export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, triggerSplash }) => {
+  const { user, role: contextRole, setRole, logout, syncPending, syncWithCloud, redZoneSosPopup, setRedZoneSosPopup, location } = useApp();
+  
+  // Security role enforcement: People accounts can ONLY see the victim interface;
+  // Official accounts can see both Victim Phone and Rescue Center.
+  const isOfficialUser = user?.role === 'RESCUE_TEAM';
+  const activeRole = isOfficialUser ? (forcedRole || contextRole) : 'VICTIM';
 
   // Active Tab states
   const [victimTab, setVictimTab] = useState<VictimTab>('HOME');
   const [rescueTab, setRescueTab] = useState<RescueTab>('DASHBOARD');
   const [inspectedSosId, setInspectedSosId] = useState<string | null>(null);
+  const [showSplash, setShowSplash] = useState<boolean>(true);
+  const [hasMeshPermissions, setHasMeshPermissions] = useState<boolean>(() => {
+    return localStorage.getItem('lifeline_mesh_permissions') === 'granted';
+  });
+  const [hasSelectedLanguage, setHasSelectedLanguage] = useState<boolean>(() => {
+    return !!localStorage.getItem('lifeline_user_lang');
+  });
 
   // Time state for status bar
   const [timeStr, setTimeStr] = useState(() => {
     const d = new Date();
     return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
   });
+
+  React.useEffect(() => {
+    if (triggerSplash) {
+      setShowSplash(true);
+    }
+  }, [triggerSplash]);
 
   React.useEffect(() => {
     const t = setInterval(() => {
@@ -52,6 +73,73 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle }) 
     return () => clearInterval(t);
   }, []);
 
+  const handleSplashComplete = React.useCallback(() => {
+    setShowSplash(false);
+  }, []);
+
+  const handleGrantPermissions = React.useCallback(() => {
+    localStorage.setItem('lifeline_mesh_permissions', 'granted');
+    setHasMeshPermissions(true);
+  }, []);
+
+  const handleLanguageSelected = React.useCallback(() => {
+    setHasSelectedLanguage(true);
+  }, []);
+
+  // 1. SPLASH SCREEN
+  if (showSplash) {
+    return (
+      <div className="smartphone-chassis">
+        <div className="phone-top-bar" style={{ zIndex: 10000 }}>
+          <span>{timeStr}</span>
+          <div className="phone-dynamic-island">
+            <div className="island-camera-lens"></div>
+            <div className="island-sensor"></div>
+          </div>
+          <span>5G • 94%</span>
+        </div>
+        <SplashScreen onComplete={handleSplashComplete} durationMs={2800} />
+      </div>
+    );
+  }
+
+  // 2. MANDATORY BLUETOOTH & WI-FI PERMISSION POPUP
+  if (!hasMeshPermissions) {
+    return (
+      <div className="smartphone-chassis">
+        <div className="phone-top-bar" style={{ zIndex: 10000 }}>
+          <span>{timeStr}</span>
+          <div className="phone-dynamic-island">
+            <div className="island-camera-lens"></div>
+            <div className="island-sensor"></div>
+          </div>
+          <span>5G • 90%</span>
+        </div>
+        <BluetoothWifiPermissionModal onGrantPermissions={handleGrantPermissions} />
+      </div>
+    );
+  }
+
+  // 3. LANGUAGE SELECTION SCREEN
+  if (!hasSelectedLanguage) {
+    return (
+      <div className="smartphone-chassis">
+        <div className="phone-top-bar">
+          <span>{timeStr}</span>
+          <div className="phone-dynamic-island">
+            <div className="island-camera-lens"></div>
+            <div className="island-sensor"></div>
+          </div>
+          <span>5G • 89%</span>
+        </div>
+        <div className="phone-screen-content" style={{ paddingBottom: 0 }}>
+          <LanguageSelectionScreen onLanguageSelected={handleLanguageSelected} />
+        </div>
+      </div>
+    );
+  }
+
+  // 4. LOGIN SCREEN (PEOPLE / OFFICIAL)
   if (!user) {
     return (
       <div className="smartphone-chassis">
@@ -83,14 +171,14 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle }) 
           {syncPending && (
             <RefreshCw size={11} className="animate-spin" color="#38BDF8" />
           )}
-          <span style={{ fontSize: 10, fontFamily: 'monospace' }}>
-            {activeRole === 'VICTIM' ? 'DEV-A8F31C' : 'TACTICAL-HQ'}
+          <span style={{ fontSize: 10, fontWeight: 700, color: activeRole === 'VICTIM' ? '#10B981' : '#38BDF8' }}>
+            {activeRole === 'VICTIM' ? '● SOS READY' : 'TACTICAL-HQ'}
           </span>
         </div>
       </div>
 
-      {/* Top Role Switcher Header inside Mobile Section */}
-      {!forcedRole && (
+      {/* Top Role Switcher Header inside Mobile Section - ONLY visible for Official accounts */}
+      {!forcedRole && isOfficialUser && (
         <div className="phone-role-switcher-bar">
           <div className="role-switcher-group">
             <button
@@ -155,6 +243,53 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle }) 
                 <div>User ID: <strong style={{ color: '#FFF' }}>{user.userId}</strong></div>
                 <div>Device ID: <strong style={{ color: '#38BDF8', fontFamily: 'monospace' }}>{user.phoneId}</strong></div>
                 <div>Emergency Contact: <strong style={{ color: '#FFF' }}>{user.emergencyContact || 'None listed'}</strong></div>
+              </div>
+
+              {/* Technical Telemetry & Diagnostics (Preserved from Home Screen) */}
+              <div style={{
+                background: 'rgba(15, 23, 42, 0.85)',
+                border: '1px solid rgba(56, 189, 248, 0.25)',
+                borderRadius: 14,
+                padding: '14px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+                fontSize: 12
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 8 }}>
+                  <span style={{ fontWeight: 800, color: '#38BDF8', fontSize: 11, letterSpacing: 0.8 }}>
+                    🛠️ TECHNICAL & HARDWARE DIAGNOSTICS
+                  </span>
+                  <span style={{ fontSize: 10, background: 'rgba(16, 185, 129, 0.2)', color: '#10B981', padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>
+                    ACTIVE
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94A3B8' }}>
+                  <span>Raw GPS Coordinates:</span>
+                  <strong style={{ color: '#FFF', fontFamily: 'monospace' }}>
+                    {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
+                  </strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94A3B8' }}>
+                  <span>GPS Precision:</span>
+                  <strong style={{ color: '#38BDF8' }}>±{location.accuracy} meters</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94A3B8' }}>
+                  <span>Cellular Network:</span>
+                  <strong style={{ color: '#EF4444' }}>OFFLINE (Tower Failure)</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94A3B8' }}>
+                  <span>Mesh Network Engine:</span>
+                  <strong style={{ color: '#10B981' }}>Store-Carry-Forward P2P</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94A3B8' }}>
+                  <span>Battery State:</span>
+                  <strong style={{ color: '#F59E0B' }}>88% • Low Power Mode</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94A3B8' }}>
+                  <span>Cryptography:</span>
+                  <strong style={{ color: '#38BDF8' }}>AES-GCM + HMAC-SHA256</strong>
+                </div>
               </div>
 
               <button

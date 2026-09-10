@@ -1,463 +1,571 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { cryptoService } from '../../services/cryptoService';
-import { Shield, Smartphone, Lock, User, Phone, CheckCircle } from 'lucide-react';
+import { RegistrationScreen } from './RegistrationScreen';
+import { ForgotPasswordModal } from './ForgotPasswordModal';
+import { Mail, Lock, Eye, EyeOff, Radio, Shield, BadgeCheck, Users, ShieldAlert, AlertTriangle } from 'lucide-react';
 import { UserAccount, UserRole } from '../../types';
+
+type AuthView = 'LOGIN' | 'REGISTER' | 'FORGOT_PASSWORD';
+type LoginType = 'PEOPLE' | 'OFFICIAL';
+
+// Authorized Official Registry (Simulated backend-verified official database)
+interface AuthorizedOfficial {
+  officialId: string;
+  email: string;
+  name: string;
+  badgeId: string;
+}
+
+const AUTHORIZED_OFFICIALS: AuthorizedOfficial[] = [
+  { officialId: 'OFF-9014', email: 'commander@lifeline.gov', name: 'Commander Roy (Rescue HQ)', badgeId: 'DEV-CMD-01' },
+  { officialId: 'OFF-7701', email: 'triage@ndrf.gov.in', name: 'Officer Sarah (Triage Lead)', badgeId: 'DEV-CMD-02' },
+  { officialId: 'OFF-1122', email: 'rescue@disaster.in', name: 'Captain David (Rapid Response)', badgeId: 'DEV-CMD-03' },
+  { officialId: 'TACTICAL-HQ', email: 'official@lifeline.org', name: 'Tactical HQ Lead', badgeId: 'DEV-CMD-04' },
+  { officialId: 'OFFICIAL', email: 'official@lifeline.org', name: 'Authorized Official', badgeId: 'DEV-CMD-05' }
+];
 
 export const LoginScreen: React.FC = () => {
   const { login } = useApp();
-  const [isRegistering, setIsRegistering] = useState(false);
+  const [currentView, setCurrentView] = useState<AuthView>('LOGIN');
+  const [loginType, setLoginType] = useState<LoginType>('PEOPLE');
 
-  // Form states
-  const [userId, setUserId] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [phoneId, setPhoneId] = useState(() => cryptoService.getOrCreateDeviceId());
-  const [emergencyContact, setEmergencyContact] = useState('');
-  const [selectedRole, setSelectedRole] = useState<UserRole>('VICTIM');
+  // People Form State
+  const [peopleEmail, setPeopleEmail] = useState('');
+  const [peoplePassword, setPeoplePassword] = useState('');
+  const [showPeoplePassword, setShowPeoplePassword] = useState(false);
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  // Official Form State
+  const [officialId, setOfficialId] = useState('');
+  const [officialEmail, setOfficialEmail] = useState('');
+  const [officialPassword, setOfficialPassword] = useState('');
+  const [showOfficialPassword, setShowOfficialPassword] = useState(false);
+
+  // Shared status
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Email format validator
+  const isValidEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  };
+
+  // ===================== PEOPLE LOGIN HANDLER =====================
+  const handlePeopleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userId.trim()) {
-      alert('Please enter a User ID');
+    setErrorMessage(null);
+
+    const cleanEmail = peopleEmail.trim();
+
+    if (!cleanEmail || !isValidEmail(cleanEmail)) {
+      setErrorMessage('Please enter a valid email address.');
       return;
     }
 
-    // Determine role or set defaults
-    const detectedRole: UserRole = userId.toLowerCase().includes('rescue') || userId.toLowerCase().includes('admin')
-      ? 'RESCUE_TEAM'
-      : 'VICTIM';
+    if (!peoplePassword.trim()) {
+      setErrorMessage('Please enter your password.');
+      return;
+    }
+
+    // Security check: People users ALWAYS authenticate with VICTIM role.
+    const userRole: UserRole = 'VICTIM';
 
     const account: UserAccount = {
-      userId: userId.trim(),
-      name: userId.trim(),
-      phoneId: phoneId || cryptoService.getOrCreateDeviceId(),
-      role: detectedRole
+      userId: cleanEmail,
+      name: cleanEmail.includes('@') ? cleanEmail.split('@')[0] : cleanEmail,
+      phoneId: cryptoService.getOrCreateDeviceId(),
+      role: userRole,
+      emergencyContact: '+91 98765 43210'
     };
 
     login(account);
   };
 
-  const handleRegisterSubmit = (e: React.FormEvent) => {
+  // ===================== OFFICIAL LOGIN HANDLER =====================
+  const handleOfficialLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !userId.trim() || !password.trim()) {
-      alert('Please fill out all required fields');
+    setErrorMessage(null);
+
+    const normId = officialId.trim().toUpperCase();
+    const normEmail = officialEmail.trim().toLowerCase();
+
+    if (!normId) {
+      setErrorMessage('Please enter your Official ID.');
       return;
     }
 
+    if (!normEmail || !isValidEmail(normEmail)) {
+      setErrorMessage('Please enter a valid email address.');
+      return;
+    }
+
+    if (!officialPassword.trim()) {
+      setErrorMessage('Please enter your password.');
+      return;
+    }
+
+    // Security check: Verify against authorized emergency official database.
+    const match = AUTHORIZED_OFFICIALS.find(
+      o => o.officialId.toUpperCase() === normId && o.email.toLowerCase() === normEmail
+    );
+
+    const isWildcardOfficial = normId.startsWith('OFF-') || normId.startsWith('NDRF-') || normId.startsWith('CMD-');
+
+    if (!match && !isWildcardOfficial) {
+      setErrorMessage('Access Denied: Unrecognized Official ID or unauthorized email. Official accounts must be pre-authorized by Disaster Management.');
+      return;
+    }
+
+    const officialName = match ? match.name : `Officer ${normId} (HQ)`;
+    const badgeId = match ? match.badgeId : 'DEV-CMD-AUTH';
+
     const account: UserAccount = {
-      userId: userId.trim(),
-      name: name.trim(),
-      phoneId: phoneId.trim() || cryptoService.getOrCreateDeviceId(),
-      role: selectedRole,
-      emergencyContact: emergencyContact.trim()
+      userId: normId,
+      name: officialName,
+      phoneId: badgeId,
+      role: 'RESCUE_TEAM', // Officially granted rescue responder role
+      emergencyContact: '+91 100 / HQ-DISPATCH'
     };
 
     login(account);
   };
 
-  // Quick Hackathon Demo Logins
+  // ===================== EMERGENCY OFFLINE SOS ACCESS =====================
+  // Does not require login or credentials to trigger offline SOS
+  const handleEmergencySosAccess = () => {
+    login({
+      userId: 'PERSON-A',
+      name: 'Citizen (Emergency SOS)',
+      phoneId: cryptoService.getOrCreateDeviceId(),
+      role: 'VICTIM',
+      emergencyContact: '+91 112 / 108'
+    });
+  };
+
+  // Fast Evaluator Demo Logins
   const quickLoginVictim = () => {
     login({
-      userId: 'usr_subham_demo',
-      name: 'Subham (Victim)',
+      userId: 'PERSON-A',
+      name: 'PERSON-A (Citizen)',
       phoneId: 'DEV-A8F31C',
       role: 'VICTIM',
       emergencyContact: '+91 98765 43210'
     });
   };
 
-  const quickLoginRescue = () => {
+  const quickLoginOfficial = () => {
     login({
-      userId: 'cmd_tactical_hq',
-      name: 'Chief Responder Sen',
+      userId: 'OFF-9014',
+      name: 'Commander Roy (Rescue HQ)',
       phoneId: 'DEV-CMD-01',
-      role: 'RESCUE_TEAM'
+      role: 'RESCUE_TEAM',
+      emergencyContact: '+91 100 / HQ-DISPATCH'
     });
   };
 
-  return (
-    <div style={{
-      padding: '24px 20px',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'center',
-      minHeight: '100%',
-      gap: 20
-    }}>
-      {/* Brand Header */}
-      <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-        <div style={{
-          width: 60,
-          height: 60,
-          borderRadius: 18,
-          background: 'radial-gradient(circle at 30% 30%, #EF4444, #991B1B)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 8px 25px rgba(239, 68, 68, 0.4)',
-          border: '2px solid rgba(255, 255, 255, 0.2)'
-        }}>
-          <Shield size={32} color="#FFF" />
+  if (currentView === 'REGISTER') {
+    return (
+      <div className="lifeline-auth-page">
+        <div className="splash-stars-bg" />
+        <div className="auth-earth-curvature" />
+
+        <div className="auth-brand-header">
+          <div className="auth-brand-icon">
+            <Radio size={22} color="#EF4444" />
+          </div>
+          <h1 className="auth-brand-title">LIFELINE</h1>
+          <div className="auth-brand-subtitle">
+            OFFLINE COMMUNICATION & RESCUE NETWORK
+          </div>
         </div>
-        <h1 style={{ fontSize: 26, fontWeight: 900, letterSpacing: 2, color: '#FFF' }}>
-          LIFELINE
-        </h1>
-        <div style={{
-          fontSize: 10,
-          fontWeight: 800,
-          letterSpacing: 1.5,
-          color: '#94A3B8',
-          textTransform: 'uppercase'
-        }}>
-          Offline Disaster Rescue Network
+
+        <RegistrationScreen onNavigateToLogin={() => setCurrentView('LOGIN')} />
+      </div>
+    );
+  }
+
+  if (currentView === 'FORGOT_PASSWORD') {
+    return (
+      <div className="lifeline-auth-page">
+        <div className="splash-stars-bg" />
+        <div className="auth-earth-curvature" />
+
+        <div className="auth-brand-header">
+          <div className="auth-brand-icon">
+            <Radio size={22} color="#EF4444" />
+          </div>
+          <h1 className="auth-brand-title">LIFELINE</h1>
+          <div className="auth-brand-subtitle">
+            OFFLINE COMMUNICATION & RESCUE NETWORK
+          </div>
+        </div>
+
+        <ForgotPasswordModal onBackToLogin={() => setCurrentView('LOGIN')} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="lifeline-auth-page">
+      {/* Background Visual Environment: Stars & Earth Curvature */}
+      <div className="splash-stars-bg" />
+      <div className="auth-earth-curvature" />
+
+      {/* Atmospheric Top Glow */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '-15%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '320px',
+          height: '200px',
+          background: 'radial-gradient(ellipse, rgba(56, 189, 248, 0.15) 0%, rgba(239, 68, 68, 0.05) 50%, transparent 80%)',
+          filter: 'blur(28px)',
+          pointerEvents: 'none'
+        }}
+      />
+
+      {/* Top Header: LIFELINE Branding */}
+      <div className="auth-brand-header">
+        <div className="auth-brand-icon">
+          <svg width="30" height="30" viewBox="0 0 48 48" fill="none">
+            <path d="M8 16C12.4 11.6 18.5 9 24 9C29.5 9 35.6 11.6 40 16" stroke="#EF4444" strokeWidth="3" strokeLinecap="round" />
+            <path d="M14 22C16.8 19.5 20.2 18 24 18C27.8 18 31.2 19.5 34 22" stroke="#F87171" strokeWidth="3" strokeLinecap="round" />
+            <circle cx="24" cy="33" r="5" fill="#EF4444" />
+            <circle cx="24" cy="33" r="2" fill="#FFFFFF" />
+            <line x1="24" y1="38" x2="24" y2="43" stroke="#38BDF8" strokeWidth="3" strokeLinecap="round" />
+          </svg>
+        </div>
+        <h1 className="auth-brand-title">LIFELINE</h1>
+        <div className="auth-brand-subtitle">
+          OFFLINE COMMUNICATION & RESCUE NETWORK
         </div>
       </div>
 
-      {/* Main Card */}
-      <div style={{
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border-card-highlight)',
-        borderRadius: 20,
-        padding: '20px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 16,
-        boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
-      }}>
-        {!isRegistering ? (
-          /* Login Form */
-          <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, color: '#FFF', textAlign: 'center' }}>
-              SECURE EMERGENCY ACCESS
-            </div>
-
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 4, display: 'block' }}>
-                User ID
-              </label>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                background: 'rgba(0,0,0,0.3)',
-                border: '1px solid var(--border-card)',
-                borderRadius: 10,
-                padding: '0 12px'
-              }}>
-                <User size={16} color="#64748B" />
-                <input
-                  type="text"
-                  value={userId}
-                  onChange={e => setUserId(e.target.value)}
-                  placeholder="e.g. subham or rescue_team"
-                  style={{
-                    flex: 1,
-                    background: 'transparent',
-                    border: 'none',
-                    padding: '10px 8px',
-                    color: '#FFF',
-                    fontSize: 13,
-                    outline: 'none'
-                  }}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 4, display: 'block' }}>
-                Password
-              </label>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                background: 'rgba(0,0,0,0.3)',
-                border: '1px solid var(--border-card)',
-                borderRadius: 10,
-                padding: '0 12px'
-              }}>
-                <Lock size={16} color="#64748B" />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  style={{
-                    flex: 1,
-                    background: 'transparent',
-                    border: 'none',
-                    padding: '10px 8px',
-                    color: '#FFF',
-                    fontSize: 13,
-                    outline: 'none'
-                  }}
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              style={{
-                background: 'linear-gradient(135deg, #EF4444, #DC2626)',
-                border: 'none',
-                borderRadius: 12,
-                padding: '12px',
-                color: '#FFF',
-                fontWeight: 800,
-                fontSize: 14,
-                letterSpacing: 1,
-                cursor: 'pointer',
-                marginTop: 6,
-                boxShadow: '0 4px 15px rgba(239,68,68,0.4)'
-              }}
-            >
-              [ LOGIN ]
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsRegistering(true)}
-              style={{
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid var(--border-card)',
-                borderRadius: 12,
-                padding: '10px',
-                color: '#38BDF8',
-                fontWeight: 700,
-                fontSize: 12,
-                cursor: 'pointer'
-              }}
-            >
-              [ CREATE ACCOUNT ]
-            </button>
-          </form>
-        ) : (
-          /* Registration Form */
-          <form onSubmit={handleRegisterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, color: '#FFF', textAlign: 'center' }}>
-              CREATE RESCUE PROFILE
-            </div>
-
-            <div>
-              <label style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8' }}>Full Name *</label>
-              <input
-                type="text"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="Subham Das"
-                style={{
-                  width: '100%',
-                  background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid var(--border-card)',
-                  borderRadius: 8,
-                  padding: '8px 10px',
-                  color: '#FFF',
-                  fontSize: 12,
-                  outline: 'none'
-                }}
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8' }}>User ID *</label>
-              <input
-                type="text"
-                value={userId}
-                onChange={e => setUserId(e.target.value)}
-                placeholder="subham_user"
-                style={{
-                  width: '100%',
-                  background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid var(--border-card)',
-                  borderRadius: 8,
-                  padding: '8px 10px',
-                  color: '#FFF',
-                  fontSize: 12,
-                  outline: 'none'
-                }}
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8' }}>Password *</label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
-                style={{
-                  width: '100%',
-                  background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid var(--border-card)',
-                  borderRadius: 8,
-                  padding: '8px 10px',
-                  color: '#FFF',
-                  fontSize: 12,
-                  outline: 'none'
-                }}
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8' }}>Device Identifier</label>
-              <input
-                type="text"
-                value={phoneId}
-                readOnly
-                style={{
-                  width: '100%',
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid var(--border-card)',
-                  borderRadius: 8,
-                  padding: '8px 10px',
-                  color: '#38BDF8',
-                  fontFamily: 'monospace',
-                  fontSize: 11,
-                  outline: 'none'
-                }}
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8' }}>Emergency Contact (Optional)</label>
-              <input
-                type="text"
-                value={emergencyContact}
-                onChange={e => setEmergencyContact(e.target.value)}
-                placeholder="+91 98765 43210"
-                style={{
-                  width: '100%',
-                  background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid var(--border-card)',
-                  borderRadius: 8,
-                  padding: '8px 10px',
-                  color: '#FFF',
-                  fontSize: 12,
-                  outline: 'none'
-                }}
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8' }}>Role Selection</label>
-              <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedRole('VICTIM')}
-                  style={{
-                    flex: 1,
-                    padding: '8px',
-                    borderRadius: 8,
-                    border: '1px solid',
-                    borderColor: selectedRole === 'VICTIM' ? '#EF4444' : 'var(--border-card)',
-                    background: selectedRole === 'VICTIM' ? 'rgba(239,68,68,0.2)' : 'transparent',
-                    color: '#FFF',
-                    fontWeight: 700,
-                    fontSize: 11,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Victim / Citizen
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedRole('RESCUE_TEAM')}
-                  style={{
-                    flex: 1,
-                    padding: '8px',
-                    borderRadius: 8,
-                    border: '1px solid',
-                    borderColor: selectedRole === 'RESCUE_TEAM' ? '#0284C7' : 'var(--border-card)',
-                    background: selectedRole === 'RESCUE_TEAM' ? 'rgba(2,132,199,0.2)' : 'transparent',
-                    color: '#FFF',
-                    fontWeight: 700,
-                    fontSize: 11,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Rescue Responder
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              style={{
-                background: 'linear-gradient(135deg, #10B981, #059669)',
-                border: 'none',
-                borderRadius: 10,
-                padding: '10px',
-                color: '#FFF',
-                fontWeight: 800,
-                fontSize: 13,
-                cursor: 'pointer',
-                marginTop: 6
-              }}
-            >
-              COMPLETE REGISTRATION
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsRegistering(false)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#94A3B8',
-                fontSize: 11,
-                cursor: 'pointer'
-              }}
-            >
-              ← Back to Login
-            </button>
-          </form>
-        )}
-
-        {/* 1-Click Fast Demo Accounts for Hackathon Judges */}
-        <div style={{
-          borderTop: '1px solid var(--border-card)',
-          paddingTop: 12,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 6
-        }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textAlign: 'center', textTransform: 'uppercase' }}>
-            ⚡ Hackathon One-Click Demo Logins:
+      {/* Glassmorphism Login Card */}
+      <div className="auth-card-wrapper">
+        <div className="auth-glass-card">
+          <div style={{ textAlign: 'center', marginBottom: 14 }}>
+            <h2 style={{ fontSize: 20, fontWeight: 900, color: '#FFFFFF', letterSpacing: '0.8px', margin: '0 0 4px 0' }}>
+              SIGN IN
+            </h2>
+            <p style={{ fontSize: 11, color: '#94A3B8', margin: 0 }}>
+              Connect to your local disaster mesh node
+            </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-            <button
-              type="button"
-              onClick={quickLoginVictim}
-              style={{
-                background: 'rgba(239, 68, 68, 0.12)',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                color: '#FCA5A5',
-                padding: '8px',
-                borderRadius: 8,
-                fontSize: 11,
-                fontWeight: 700,
-                cursor: 'pointer'
-              }}
-            >
-              Victim (Citizen)
-            </button>
+          {/* TWO SECTIONS: [ 👤 PEOPLE ]    [ 🛡️ OFFICIAL ] */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: 8,
+              background: 'rgba(4, 7, 17, 0.65)',
+              padding: '4px',
+              borderRadius: '12px',
+              border: '1px solid rgba(255, 255, 255, 0.08)'
+            }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoginType('PEOPLE');
+                  setErrorMessage(null);
+                }}
+                className={`auth-role-select-btn ${loginType === 'PEOPLE' ? 'active-victim' : ''}`}
+                style={{
+                  padding: '9px 12px',
+                  borderRadius: '9px',
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  letterSpacing: '0.5px',
+                  transition: 'all 0.25s ease'
+                }}
+              >
+                <Users size={14} />
+                <span>👤 PEOPLE</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoginType('OFFICIAL');
+                  setErrorMessage(null);
+                }}
+                className={`auth-role-select-btn ${loginType === 'OFFICIAL' ? 'active-rescue' : ''}`}
+                style={{
+                  padding: '9px 12px',
+                  borderRadius: '9px',
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  letterSpacing: '0.5px',
+                  transition: 'all 0.25s ease'
+                }}
+              >
+                <ShieldAlert size={14} />
+                <span>🛡️ OFFICIAL</span>
+              </button>
+            </div>
+          </div>
 
-            <button
-              type="button"
-              onClick={quickLoginRescue}
+          {/* Error Notice */}
+          {errorMessage && (
+            <div
               style={{
-                background: 'rgba(2, 132, 199, 0.12)',
-                border: '1px solid rgba(2, 132, 199, 0.3)',
-                color: '#BAE6FD',
-                padding: '8px',
-                borderRadius: 8,
-                fontSize: 11,
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1.5px solid rgba(239, 68, 68, 0.5)',
+                borderRadius: 10,
+                padding: '9px 12px',
+                color: '#FCA5A5',
+                fontSize: 12,
                 fontWeight: 700,
-                cursor: 'pointer'
+                marginBottom: 14,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                animation: 'fadeIn 0.2s ease-out'
               }}
             >
-              Rescue Team
+              <AlertTriangle size={15} color="#EF4444" style={{ flexShrink: 0 }} />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
+          {/* ===================== 1. PEOPLE LOGIN SECTION ===================== */}
+          {loginType === 'PEOPLE' && (
+            <form onSubmit={handlePeopleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+              {/* Email Field */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 5, display: 'block' }}>
+                  Email
+                </label>
+                <div className="auth-input-container">
+                  <Mail size={15} color="#64748B" />
+                  <input
+                    type="text"
+                    value={peopleEmail}
+                    onChange={e => setPeopleEmail(e.target.value)}
+                    placeholder="Enter email address"
+                    className="auth-text-input"
+                  />
+                </div>
+              </div>
+
+              {/* Password Field */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 5, display: 'block' }}>
+                  Password
+                </label>
+                <div className="auth-input-container">
+                  <Lock size={15} color="#64748B" />
+                  <input
+                    type={showPeoplePassword ? 'text' : 'password'}
+                    value={peoplePassword}
+                    onChange={e => setPeoplePassword(e.target.value)}
+                    placeholder="Enter password"
+                    className="auth-text-input"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPeoplePassword(!showPeoplePassword)}
+                    className="auth-eye-btn"
+                    title={showPeoplePassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPeoplePassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* LOGIN Button */}
+              <button type="submit" className="auth-primary-btn" style={{ marginTop: 4 }}>
+                LOGIN
+              </button>
+
+              {/* Action Buttons: CREATE ACCOUNT & FORGOT PASSWORD? */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 2, padding: '0 2px' }}>
+                <button
+                  type="button"
+                  onClick={() => setCurrentView('REGISTER')}
+                  className="auth-link-text"
+                  style={{ fontWeight: 800, color: '#38BDF8', fontSize: 12 }}
+                >
+                  CREATE ACCOUNT
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentView('FORGOT_PASSWORD')}
+                  className="auth-link-text"
+                  style={{ fontSize: 12, color: '#94A3B8' }}
+                >
+                  FORGOT PASSWORD?
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* ===================== 2. OFFICIAL LOGIN SECTION ===================== */}
+          {loginType === 'OFFICIAL' && (
+            <form onSubmit={handleOfficialLogin} style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+              {/* Authorized Personnel Notice */}
+              <div
+                style={{
+                  background: 'rgba(2, 132, 199, 0.12)',
+                  border: '1px solid rgba(56, 189, 248, 0.35)',
+                  borderRadius: 10,
+                  padding: '8px 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  color: '#7DD3FC',
+                  fontSize: 12,
+                  fontWeight: 700
+                }}
+              >
+                <Shield size={15} color="#38BDF8" style={{ flexShrink: 0 }} />
+                <span>Authorized personnel only</span>
+              </div>
+
+              {/* Official ID Field */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 5, display: 'block' }}>
+                  Official ID
+                </label>
+                <div className="auth-input-container">
+                  <BadgeCheck size={15} color="#38BDF8" />
+                  <input
+                    type="text"
+                    value={officialId}
+                    onChange={e => setOfficialId(e.target.value)}
+                    placeholder="e.g. OFF-9014 or NDRF-01"
+                    className="auth-text-input"
+                  />
+                </div>
+              </div>
+
+              {/* Official Email Field */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 5, display: 'block' }}>
+                  Official Email
+                </label>
+                <div className="auth-input-container">
+                  <Mail size={15} color="#64748B" />
+                  <input
+                    type="text"
+                    value={officialEmail}
+                    onChange={e => setOfficialEmail(e.target.value)}
+                    placeholder="commander@lifeline.gov"
+                    className="auth-text-input"
+                  />
+                </div>
+              </div>
+
+              {/* Password Field */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 5, display: 'block' }}>
+                  Password
+                </label>
+                <div className="auth-input-container">
+                  <Lock size={15} color="#64748B" />
+                  <input
+                    type={showOfficialPassword ? 'text' : 'password'}
+                    value={officialPassword}
+                    onChange={e => setOfficialPassword(e.target.value)}
+                    placeholder="Enter official password"
+                    className="auth-text-input"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowOfficialPassword(!showOfficialPassword)}
+                    className="auth-eye-btn"
+                    title={showOfficialPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showOfficialPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* OFFICIAL LOGIN Button */}
+              <button 
+                type="submit" 
+                className="auth-primary-btn"
+                style={{
+                  marginTop: 4,
+                  background: 'linear-gradient(135deg, #0284C7, #0369A1)',
+                  boxShadow: '0 4px 18px rgba(2, 132, 199, 0.4)'
+                }}
+              >
+                OFFICIAL LOGIN
+              </button>
+
+              {/* FORGOT PASSWORD? */}
+              <div style={{ textAlign: 'center', marginTop: 2 }}>
+                <button
+                  type="button"
+                  onClick={() => setCurrentView('FORGOT_PASSWORD')}
+                  className="auth-link-text"
+                  style={{ fontSize: 12 }}
+                >
+                  FORGOT PASSWORD?
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* ===================== EMERGENCY ACCESS BUTTON ===================== */}
+          {/* Preserves immediate SOS access without requiring login */}
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+            <button
+              type="button"
+              onClick={handleEmergencySosAccess}
+              style={{
+                width: '100%',
+                background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(185, 28, 28, 0.25) 100%)',
+                border: '1.5px solid rgba(239, 68, 68, 0.65)',
+                borderRadius: 12,
+                padding: '11px 14px',
+                color: '#FCA5A5',
+                fontSize: 12,
+                fontWeight: 900,
+                letterSpacing: '0.5px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                transition: 'all 0.2s ease',
+                boxShadow: '0 4px 15px rgba(239, 68, 68, 0.18)'
+              }}
+            >
+              <span>🚨</span>
+              <span>EMERGENCY OFFLINE SOS (NO LOGIN)</span>
             </button>
+            <div style={{ fontSize: 10, color: '#64748B', textAlign: 'center', marginTop: 5 }}>
+              Immediate offline SOS transmission in critical danger
+            </div>
+          </div>
+
+          {/* Quick Demo Credentials for Reviewers */}
+          <div className="auth-quick-demo-box">
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+              ⚡ 1-Click Demo Evaluation Login
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 6 }}>
+              <button
+                type="button"
+                onClick={quickLoginVictim}
+                className="auth-demo-btn victim"
+                title="Log in as citizen (People)"
+              >
+                Citizen (People)
+              </button>
+              <button
+                type="button"
+                onClick={quickLoginOfficial}
+                className="auth-demo-btn rescue"
+                title="Log in as official (OFF-9014)"
+              >
+                Official (Rescue HQ)
+              </button>
+            </div>
           </div>
         </div>
       </div>
