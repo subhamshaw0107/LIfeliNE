@@ -48,6 +48,21 @@ export type BleFoundEvent = { address: string; name: string; rssi: number };
 /** Peer-set change notification (snapshot array, never the live Set). */
 export type PeersChangedCallback = (peerIds: string[]) => void;
 
+/** Snapshot of live radio state for the dev diagnostics panel. No secrets. */
+export interface BleDiagnostics {
+  initialized: boolean;
+  permissionsGranted: boolean | null;
+  advertising: boolean;
+  scanning: boolean;
+  localPeerId: string;
+  connectedPeers: string[];
+  discoveredCount: number;
+  lastPeerFound: string | null;
+  lastConnectionState: string;
+  lastPacketReceived: { peerId: string; bytes: number; at: number } | null;
+  lastPacketSent: { peerId: string; bytes: number; ok: boolean; at: number } | null;
+}
+
 /**
  * Minimal surface of the native "BleMesh" Capacitor plugin consumed by
  * BleMeshTransport. Mirrors BleMeshPlugin.kt one-to-one.
@@ -101,6 +116,16 @@ export class BleMeshTransport implements MeshTransport {
   private bridgeSubscribed = false;
   private bridgeHandles: BleListenerHandle[] = [];
   private started = false;
+  // Diagnostic-only runtime state (never SOS content, never keys).
+  private diagInitialized = false;
+  private diagPermissions: boolean | null = null;
+  private diagAdvertising = false;
+  private diagScanning = false;
+  private diagDiscovered = new Map<string, { name: string; rssi: number; at: number }>();
+  private diagLastPeerFound: string | null = null;
+  private diagLastConnection = 'never connected';
+  private diagLastRx: { peerId: string; bytes: number; at: number } | null = null;
+  private diagLastTx: { peerId: string; bytes: number; ok: boolean; at: number } | null = null;
 
   constructor(nodeIdHint: string, bridge: BleNativeBridge) {
     this.nodeId = nodeIdHint;
@@ -121,19 +146,29 @@ export class BleMeshTransport implements MeshTransport {
     if (this.started) return true;
     try {
       const info = await this.bridge.initialize();
+      this.diagInitialized = true;
+      console.log('[BLE-DIAG] initialize');
       if (!info || info.supported === false) return false;
       if (info.peerId) this.nodeId = info.peerId;
       const perms = await this.bridge.requestPermissions();
+      this.diagPermissions = perms?.granted === true;
+      console.log(`[BLE-DIAG] permissions granted=${this.diagPermissions}`);
       if (!perms || perms.granted !== true) return false;
       await this.ensureSubscribed();
       try {
         await this.bridge.startScan();
+        this.diagScanning = true;
+        console.log('[BLE-DIAG] scanning started=true');
       } catch {
+        console.log('[BLE-DIAG] scanning started=false');
         return false;
       }
       try {
         await this.bridge.startAdvertising();
+        this.diagAdvertising = true;
+        console.log('[BLE-DIAG] advertising started=true');
       } catch {
+        console.log('[BLE-DIAG] advertising started=false');
         return false;
       }
       this.started = true;
@@ -156,7 +191,26 @@ export class BleMeshTransport implements MeshTransport {
     } catch {
       // ignore shutdown races
     }
+    this.diagScanning = false;
+    this.diagAdvertising = false;
     this.started = false;
+  }
+
+  /** Read-only radio snapshot for diagnostics. No secrets, no packet bytes. */
+  getDiagnostics(): BleDiagnostics {
+    return {
+      initialized: this.diagInitialized,
+      permissionsGranted: this.diagPermissions,
+      advertising: this.diagAdvertising,
+      scanning: this.diagScanning,
+      localPeerId: this.nodeId,
+      connectedPeers: [...this.connectedPeers],
+      discoveredCount: this.diagDiscovered.size,
+      lastPeerFound: this.diagLastPeerFound,
+      lastConnectionState: this.diagLastConnection,
+      lastPacketReceived: this.diagLastRx,
+      lastPacketSent: this.diagLastTx,
+    };
   }
 
   /** Release bridge listeners (app teardown / tests). */
@@ -182,7 +236,10 @@ export class BleMeshTransport implements MeshTransport {
       const peers = await this.getConnectedPeers();
       if (!peers.includes(peerId)) return false;
       const result = await this.bridge.send(peerId, uint8ToBase64(packetBytes));
-      return result != null && result.ok === true;
+      const ok = result != null && result.ok === true;
+      this.diagLastTx = { peerId, bytes: packetBytes.length, ok, at: Date.now() };
+      console.log(`[BLE-DIAG] send: to=${peerId} bytes=${packetBytes.length} ok=${ok}`);
+      return ok;
     } catch {
       // Normal radio failure -> boolean false (M3 SCF retains the packet).
       return false;
@@ -244,9 +301,19 @@ export class BleMeshTransport implements MeshTransport {
         this.handlePeerDisconnected(payload);
       });
       this.bridgeHandles.push(disconnectedHandle);
-      // Discovery only: a found peer is NOT connected — tracked nowhere,
-      // subscription kept so future consumers can observe scan results.
-      const foundHandle = await this.bridge.addListener('peerFound', () => undefined);
+      // Discovery only: a found peer is NOT connected — tracked for
+      // diagnostics, never added to the connected set.
+      const foundHandle = await this.bridge.addListener('peerFound', payload => {
+        if (payload && typeof payload.address === 'string') {
+          this.diagDiscovered.set(payload.address, {
+            name: typeof payload.name === 'string' ? payload.name : '',
+            rssi: typeof payload.rssi === 'number' ? payload.rssi : 0,
+            at: Date.now(),
+          });
+          this.diagLastPeerFound = payload.address;
+          console.log(`[BLE-DIAG] peer found: ${payload.address}`);
+        }
+      });
       this.bridgeHandles.push(foundHandle);
     } catch {
       this.bridgeSubscribed = false;
@@ -273,6 +340,8 @@ export class BleMeshTransport implements MeshTransport {
     }
     if (this.connectedPeers.has(payload.peerId)) return;
     this.connectedPeers.add(payload.peerId);
+    this.diagLastConnection = `connected ${payload.peerId}`;
+    console.log(`[BLE-DIAG] peer connected: ${payload.peerId}`);
     this.notifyPeerListeners();
   }
 
@@ -281,6 +350,8 @@ export class BleMeshTransport implements MeshTransport {
       return;
     }
     if (!this.connectedPeers.delete(payload.peerId)) return;
+    this.diagLastConnection = `disconnected ${payload.peerId}`;
+    console.log(`[BLE-DIAG] peer disconnected: ${payload.peerId}`);
     this.notifyPeerListeners();
   }
 
@@ -311,6 +382,7 @@ export class BleMeshTransport implements MeshTransport {
     }
     if (bytes.length === 0) return;
     const sender = payload.peerId;
+    this.diagLastRx = { peerId: sender, bytes: bytes.length, at: Date.now() };
     // DIAG-LOG: temporary physical-test aid (remove after field verification).
     console.log(`[BLE-DIAG] packet from ${sender}, ${bytes.length} bytes -> M3`);
     const snapshot = [...this.listeners];

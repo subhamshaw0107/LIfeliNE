@@ -96,10 +96,17 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
 
     // Hardware Status Strip
     statusMeshReady: 'Mesh Active',
+    statusMeshSearching: 'Mesh Searching',
+    statusMeshOffline: 'Mesh Offline',
     statusGpsActive: 'GPS Locked',
+    statusGpsReal: 'REAL GPS',
+    statusGpsPending: 'GPS • PENDING',
     statusInternetOff: 'No Internet (Mesh Mode)',
     statusInternetOn: 'Internet Connected',
-    batteryLabel: 'Battery'
+    batteryLabel: 'Battery',
+    batteryUnknown: 'Battery • N/A',
+    chatRealGps: 'REAL GPS fix',
+    chatDemoLocation: 'DEMO LOCATION',
   },
   hi: {
     // App Header & Meta

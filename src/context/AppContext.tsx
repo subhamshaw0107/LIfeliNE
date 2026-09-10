@@ -58,6 +58,7 @@ interface AppContextType {
   // Truthful GPS telemetry flag: true only when real GPS coordinates have been acquired.
   // false when fallback/demo coordinates are in effect.
   isGpsReal: boolean;
+  deviceBattery: number | null;
   rateLimitState: RateLimitState;
   sosList: SosPacket[];
   victimActiveSos: SosPacket | null;
@@ -203,10 +204,11 @@ const INITIAL_MOCK_SOS: SosPacket[] = [
 
 /**
  * Real device battery level (0-100) via the Battery Status API where the
- * WebView exposes it (Chromium/Android). Falls back to the demo value when
- * unavailable — never throws, never blocks SOS creation.
+ * WebView exposes it (Chromium/Android). Returns null when unavailable so
+ * callers can distinguish a real reading from the demo fallback (79) —
+ * never throws, never blocks SOS creation.
  */
-async function getDeviceBatteryLevel(): Promise<number> {
+async function getDeviceBatteryLevel(): Promise<number | null> {
   try {
     const nav = navigator as unknown as {
       getBattery?: () => Promise<{ level?: number }>;
@@ -220,7 +222,7 @@ async function getDeviceBatteryLevel(): Promise<number> {
   } catch {
     // ignore — caller uses the demo fallback
   }
-  return 79;
+  return null;
 }
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -318,6 +320,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   });
   // Truthful GPS telemetry flag: false until real physical GPS fix is acquired
   const [isGpsReal, setIsGpsReal] = useState<boolean>(false);
+
+  // Real device battery level (0-100), null while unknown. Used by the
+  // status strip instead of a hardcoded value; SOS packets stamp their
+  // own reading at send time via getDeviceBatteryLevel().
+  const [deviceBattery, setDeviceBattery] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getDeviceBatteryLevel().then(level => {
+      if (!cancelled) setDeviceBattery(level);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Disaster zones
   const [disasterZones] = useState<DisasterZone[]>(DEFAULT_DISASTER_ZONES);
@@ -481,17 +497,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // and the UI explicitly indicates the location status instead of masquerading.
   useEffect(() => {
     let cancelled = false;
+    console.log(`[GPS-DIAG] request started (native=${isNative})`);
     geoService.getCurrentLocation({ requireRealGps: isNative }).then(
       coords => {
         if (!cancelled) {
           updateLocation(coords);
           setIsGpsReal(true);
+          console.log(`[GPS-DIAG] real fix acquired: ${coords.latitude}, ${coords.longitude} (±${coords.accuracy}m)`);
           console.log(`[GPS] Physical fix acquired: ${coords.latitude}, ${coords.longitude} (±${coords.accuracy}m)`);
         }
       },
       err => {
         if (!cancelled) {
           setIsGpsReal(false);
+          console.log('[GPS-DIAG] location unavailable:', err instanceof Error ? err.message : err);
           console.warn('[GPS] Native location provider unavailable or permission denied:', err);
         }
       }
@@ -627,7 +646,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       encryptionStatus: 'AUTHENTICATED_AES_GCM_VALID',
       encryptedPayload: encResult.ciphertext,
       iv: encResult.iv,
-      batteryLevel: await getDeviceBatteryLevel(),
+      batteryLevel: (await getDeviceBatteryLevel()) ?? 79,
       createdAt: now,
       statusHistory: [
         { status: 'CREATED', timestamp: now, detail: `SOS created by sender ${senderId}` },
@@ -878,6 +897,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         realPeerIds,
         isNative,
         isGpsReal,
+        deviceBattery,
         rateLimitState,
         sosList,
         victimActiveSos,
