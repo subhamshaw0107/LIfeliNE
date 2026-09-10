@@ -262,6 +262,7 @@ export const VictimHome: React.FC<Props> = ({
               {riskEval.riskLevel === 'WARNING' &&
                 `Near ${riskEval.closestZone.name} • ${riskEval.distanceKm} km away`}
               {riskEval.riskLevel === 'SAFE' && 'No active disaster hazard in your immediate vicinity'}
+              {!isGpsReal && ' • (SIMULATED LOCATION)'}
             </p>
           </div>
         </div>

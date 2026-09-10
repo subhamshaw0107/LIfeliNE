@@ -4,7 +4,7 @@ import { HardwareStatusStrip } from '../common/HardwareStatusStrip';
 import { Send, CheckCircle2, AlertTriangle, HeartPulse, Truck, Users, Droplets, Ban, ArrowLeft } from 'lucide-react';
 
 export const EmergencyChat: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  const { sendQuickMessage, sosList, user, location, t } = useApp();
+  const { sendQuickMessage, sosList, user, location, isGpsReal, t } = useApp();
   const [customText, setCustomText] = useState('');
   const [isSending, setIsSending] = useState(false);
 
@@ -74,7 +74,7 @@ export const EmergencyChat: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         }}
       >
         <div style={{ fontWeight: 700, marginBottom: 2 }}>📡 MESH BROADCAST</div>
-        <div>{t('chatNotice')} ({location.latitude.toFixed(4)}, {location.longitude.toFixed(4)})</div>
+        <div>{t('chatNotice')} ({location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}) • {isGpsReal ? t('chatRealGps') : t('chatDemoLocation')}</div>
       </div>
 
       {/* Predefined 1-Tap Messages */}

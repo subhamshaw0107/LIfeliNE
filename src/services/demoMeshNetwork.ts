@@ -299,6 +299,17 @@ class DemoMeshNetwork {
   }
 
   /**
+   * Live radio diagnostics from the self transport, or null when running
+   * on the mock transport (browser/demo/tests). Read-only snapshot.
+   */
+  getBleDiagnostics(): import('../transport/bleMeshTransport').BleDiagnostics | null {
+    if (this.selfTransport instanceof BleMeshTransport) {
+      return this.selfTransport.getDiagnostics();
+    }
+    return null;
+  }
+
+  /**
    * Observe real BLE connected-peer changes. Fires with the exact snapshot
    * reported by BleMeshTransport on every connect/disconnect — IDs are
    * forwarded unmodified (never mapped to Person A/B/C/D, no coordinates).

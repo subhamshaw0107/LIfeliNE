@@ -46,18 +46,24 @@ class BleMeshPlugin : Plugin() {
         }
 
         override fun onPeerConnected(peerId: String) {
+            // DIAG-LOG: temporary physical-test aid (remove after field verification).
+            Log.i(TAG, "DIAG peer connected: $peerId")
             val payload = JSObject()
             payload.put("peerId", peerId)
             emit(BleConstants.EVENT_PEER_CONNECTED, payload)
         }
 
         override fun onPeerDisconnected(peerId: String) {
+            // DIAG-LOG: temporary physical-test aid (remove after field verification).
+            Log.i(TAG, "DIAG peer disconnected: $peerId")
             val payload = JSObject()
             payload.put("peerId", peerId)
             emit(BleConstants.EVENT_PEER_DISCONNECTED, payload)
         }
 
         override fun onPeerFound(address: String, name: String?, rssi: Int) {
+            // DIAG-LOG: temporary physical-test aid (remove after field verification).
+            Log.i(TAG, "DIAG peer found: $address (${name ?: "?"}) rssi=$rssi")
             val payload = JSObject()
             payload.put("address", address)
             payload.put("name", name ?: "")
@@ -243,8 +249,11 @@ class BleMeshPlugin : Plugin() {
             call.reject("INVALID_ARGS", "data is not valid base64")
             return
         }
+        val ok = (manager?.send(peerId, bytes) == true)
+        // DIAG-LOG: temporary physical-test aid (remove after field verification).
+        Log.i(TAG, "DIAG send: to=$peerId bytes=${bytes.size} ok=$ok")
         val result = JSObject()
-        result.put("ok", (manager?.send(peerId, bytes) == true))
+        result.put("ok", ok)
         call.resolve(result)
     }
 
