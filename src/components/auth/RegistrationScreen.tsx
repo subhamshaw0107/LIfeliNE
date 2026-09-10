@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { cryptoService } from '../../services/cryptoService';
-import { User, Mail, Phone, Lock, Eye, EyeOff, ArrowLeft, Loader2 } from 'lucide-react';
-import { UserAccount } from '../../types';
-import { isFirebaseConfigured, registerWithFirebase } from '../../services/firebase';
+import { Shield, User, Mail, Phone, Lock, Eye, EyeOff, ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
+import { registerWithFirebase, isFirebaseConfigured, formatFirebaseAuthError } from '../../services/firebase';
 
 interface Props {
   onNavigateToLogin: () => void;
@@ -19,15 +17,22 @@ export const RegistrationScreen: React.FC<Props> = ({ onNavigateToLogin }) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const isValidEmail = (val: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
+
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
-    if (!fullName.trim() || !phone.trim() || !password.trim() || !email.trim()) {
+    if (!fullName.trim() || !email.trim() || !phone.trim() || !password) {
       setErrorMsg('Please fill in Full Name, Email, Phone Number, and Password.');
+      return;
+    }
+
+    if (!isValidEmail(email)) {
+      setErrorMsg('Please enter a valid email address.');
       return;
     }
 
@@ -37,44 +42,31 @@ export const RegistrationScreen: React.FC<Props> = ({ onNavigateToLogin }) => {
     }
 
     if (password.length < 6) {
-      setErrorMsg('Password must be at least 6 characters long.');
+      setErrorMsg('Password must be at least 6 characters.');
+      return;
+    }
+
+    if (!isFirebaseConfigured()) {
+      setErrorMsg('Firebase Authentication is not configured. Please add your Firebase credentials to `.env.local` to register.');
       return;
     }
 
     setIsLoading(true);
 
     try {
-      if (isFirebaseConfigured()) {
-        const account = await registerWithFirebase({
-          fullName: fullName.trim(),
-          email: email.trim(),
-          phone: phone.trim(),
-          password,
-          role: 'VICTIM'
-        });
-        login(account);
-      } else {
-        const deviceId = cryptoService.getOrCreateDeviceId();
-        const account: UserAccount = {
-          userId: phone.trim() || email.trim() || `usr_${Date.now().toString(36)}`,
-          name: fullName.trim(),
-          phoneId: deviceId,
-          role: 'VICTIM',
-          emergencyContact: phone.trim()
-        };
-        login(account);
-      }
+      // Create user account via Firebase Authentication (passwords managed securely by Firebase)
+      const account = await registerWithFirebase({
+        fullName: fullName.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        password,
+        role: 'VICTIM'
+      });
+      login(account);
     } catch (err: any) {
       console.error('[LIFELINE Registration Error]', err);
-      let msg = err?.message || 'Failed to create account.';
-      if (err?.code === 'auth/email-already-in-use') {
-        msg = 'An account with this email already exists. Please log in instead.';
-      } else if (err?.code === 'auth/invalid-email') {
-        msg = 'Please enter a valid email address.';
-      } else if (err?.code === 'auth/weak-password') {
-        msg = 'Password is too weak. Please use at least 6 characters.';
-      }
-      setErrorMsg(msg);
+      const friendlyMsg = formatFirebaseAuthError(err);
+      setErrorMsg(friendlyMsg);
     } finally {
       setIsLoading(false);
     }
@@ -85,10 +77,10 @@ export const RegistrationScreen: React.FC<Props> = ({ onNavigateToLogin }) => {
       <div className="auth-glass-card">
         {/* Card Header */}
         <div style={{ textAlign: 'center', marginBottom: 18 }}>
-          <h2 style={{ fontSize: 20, fontWeight: 900, color: '#FFFFFF', letterSpacing: '0.5px', margin: '0 0 6px 0' }}>
+          <h2 style={{ fontSize: 20, fontWeight: 900, color: 'var(--text-main)', letterSpacing: '0.5px', margin: '0 0 6px 0' }}>
             CREATE YOUR LIFELINE ACCOUNT
           </h2>
-          <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>
+          <p style={{ fontSize: 12, color: 'var(--text-sub)', margin: 0 }}>
             Join the store-carry-forward disaster mesh network
           </p>
         </div>
@@ -96,24 +88,28 @@ export const RegistrationScreen: React.FC<Props> = ({ onNavigateToLogin }) => {
         {errorMsg && (
           <div
             style={{
-              background: 'rgba(239, 68, 68, 0.15)',
-              border: '1px solid rgba(239, 68, 68, 0.35)',
-              borderRadius: 8,
-              padding: '8px 12px',
-              color: '#FCA5A5',
+              background: '#FEF2F2',
+              border: '1px solid #FECACA',
+              borderRadius: 10,
+              padding: '10px 12px',
+              color: '#DC2626',
               fontSize: 12,
               fontWeight: 600,
-              marginBottom: 10
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 8,
+              marginBottom: 12
             }}
           >
-            ⚠️ {errorMsg}
+            <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>{errorMsg}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
           {/* Full Name */}
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 4, display: 'block' }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-main)', marginBottom: 4, display: 'block' }}>
               Full Name *
             </label>
             <div className="auth-input-container">
@@ -125,14 +121,16 @@ export const RegistrationScreen: React.FC<Props> = ({ onNavigateToLogin }) => {
                 placeholder="e.g. Subham Das"
                 className="auth-text-input"
                 required
+                disabled={isLoading}
+                autoComplete="name"
               />
             </div>
           </div>
 
-          {/* Email */}
+          {/* Email Address */}
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 4, display: 'block' }}>
-              Email Address
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-main)', marginBottom: 4, display: 'block' }}>
+              Email Address *
             </label>
             <div className="auth-input-container">
               <Mail size={15} color="#64748B" />
@@ -142,13 +140,16 @@ export const RegistrationScreen: React.FC<Props> = ({ onNavigateToLogin }) => {
                 onChange={e => setEmail(e.target.value)}
                 placeholder="subham@example.com"
                 className="auth-text-input"
+                required
+                disabled={isLoading}
+                autoComplete="email"
               />
             </div>
           </div>
 
           {/* Phone Number */}
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 4, display: 'block' }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-main)', marginBottom: 4, display: 'block' }}>
               Phone Number *
             </label>
             <div className="auth-input-container">
@@ -160,14 +161,16 @@ export const RegistrationScreen: React.FC<Props> = ({ onNavigateToLogin }) => {
                 placeholder="+91 98765 43210"
                 className="auth-text-input"
                 required
+                disabled={isLoading}
+                autoComplete="tel"
               />
             </div>
           </div>
 
           {/* Password */}
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 4, display: 'block' }}>
-              Password *
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-main)', marginBottom: 4, display: 'block' }}>
+              Password * (min. 6 characters)
             </label>
             <div className="auth-input-container">
               <Lock size={15} color="#64748B" />
@@ -178,21 +181,23 @@ export const RegistrationScreen: React.FC<Props> = ({ onNavigateToLogin }) => {
                 placeholder="••••••••"
                 className="auth-text-input"
                 required
+                disabled={isLoading}
+                autoComplete="new-password"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="auth-eye-btn"
+                style={{ background: 'transparent', border: 'none', color: '#64748B', cursor: 'pointer', padding: 2 }}
                 title={showPassword ? 'Hide password' : 'Show password'}
               >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
             </div>
           </div>
 
           {/* Confirm Password */}
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 4, display: 'block' }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-main)', marginBottom: 4, display: 'block' }}>
               Confirm Password *
             </label>
             <div className="auth-input-container">
@@ -204,14 +209,16 @@ export const RegistrationScreen: React.FC<Props> = ({ onNavigateToLogin }) => {
                 placeholder="••••••••"
                 className="auth-text-input"
                 required
+                disabled={isLoading}
+                autoComplete="new-password"
               />
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="auth-eye-btn"
+                style={{ background: 'transparent', border: 'none', color: '#64748B', cursor: 'pointer', padding: 2 }}
                 title={showConfirmPassword ? 'Hide password' : 'Show password'}
               >
-                {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                {showConfirmPassword ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
             </div>
           </div>
@@ -223,8 +230,8 @@ export const RegistrationScreen: React.FC<Props> = ({ onNavigateToLogin }) => {
             disabled={isLoading}
             style={{
               marginTop: 6,
-              cursor: isLoading ? 'not-allowed' : 'pointer',
               opacity: isLoading ? 0.75 : 1,
+              cursor: isLoading ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -234,25 +241,24 @@ export const RegistrationScreen: React.FC<Props> = ({ onNavigateToLogin }) => {
             {isLoading ? (
               <>
                 <Loader2 size={16} className="animate-spin" />
-                <span>Creating Account in Firebase...</span>
+                <span>Creating Account...</span>
               </>
             ) : (
-              <span>CREATE ACCOUNT</span>
+              <span>REGISTER WITH FIREBASE</span>
             )}
           </button>
 
-          {/* Back to Login */}
-          <div style={{ textAlign: 'center', marginTop: 10, fontSize: 12, color: '#94A3B8' }}>
-            Already have an account?{' '}
-            <button
-              type="button"
-              onClick={onNavigateToLogin}
-              className="auth-link-text"
-              style={{ fontWeight: 800, color: '#38BDF8' }}
-            >
-              Login
-            </button>
-          </div>
+          {/* Back to Login Link */}
+          <button
+            type="button"
+            onClick={onNavigateToLogin}
+            className="auth-text-btn"
+            disabled={isLoading}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 4, cursor: 'pointer' }}
+          >
+            <ArrowLeft size={14} />
+            <span>Already have an account? Log In</span>
+          </button>
         </form>
       </div>
     </div>

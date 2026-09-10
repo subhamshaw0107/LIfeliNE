@@ -25,7 +25,12 @@ import { Capacitor } from '@capacitor/core';
 import { DEMO_STEPS } from '../services/demoRunner';
 import confetti from 'canvas-confetti';
 import { translations, LanguageCode } from '../i18n/translations';
-import { logoutFromFirebase } from '../services/firebase';
+import {
+  logoutFromFirebase,
+  subscribeToAuthState,
+  fetchUserAccountFromFirebase,
+  isFirebaseConfigured
+} from '../services/firebase';
 
 
 export type ThemeMode = 'light' | 'dark';
@@ -444,7 +449,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [sosList]);
 
-  // Authentication
+  // Authentication: Subscribe to real Firebase Auth state changes
+  useEffect(() => {
+    if (!isFirebaseConfigured()) return;
+
+    const unsubscribe = subscribeToAuthState(async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          const account = await fetchUserAccountFromFirebase(firebaseUser);
+          setUser(account);
+          setRole(account.role);
+          try {
+            sessionStorage.setItem('lifeline_session_user', JSON.stringify(account));
+          } catch (e) {
+            console.error(e);
+          }
+        } catch (err) {
+          console.error('[LIFELINE Auth State Sync Error]', err);
+        }
+      } else {
+        setUser(null);
+        try {
+          sessionStorage.removeItem('lifeline_session_user');
+          localStorage.removeItem('lifeline_authenticated_user');
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   const login = (account: UserAccount) => {
     setUser(account);
     setRole(account.role);
