@@ -12,7 +12,8 @@ import { LanguageSelectionScreen } from './LanguageSelectionScreen';
 import { LogoutConfirmModal } from './LogoutConfirmModal';
 import { RedZoneEmergencyModal } from './RedZoneEmergencyModal';
 import { LanguageSelector } from './LanguageSelector';
-import { InstallOnPhoneModal } from './InstallOnPhoneModal';
+import { ThemeSelectionScreen } from './ThemeSelectionScreen';
+import { ThemeSelector } from './ThemeSelector';
 import {
   Home,
   Map,
@@ -23,7 +24,9 @@ import {
   RefreshCw,
   Smartphone,
   Shield,
-  Activity
+  Activity,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 interface Props {
@@ -42,11 +45,12 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
     setRole,
     logout,
     syncPending,
-    syncWithCloud,
     redZoneSosPopup,
     setRedZoneSosPopup,
     location,
-    t
+    t,
+    theme,
+    toggleTheme
   } = useApp();
 
   // Security role enforcement: People accounts can ONLY see the victim interface;
@@ -59,6 +63,9 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
   const [rescueTab, setRescueTab] = useState<RescueTab>('DASHBOARD');
   const [inspectedSosId, setInspectedSosId] = useState<string | null>(null);
   const [showSplash, setShowSplash] = useState<boolean>(true);
+  const [hasSelectedTheme, setHasSelectedTheme] = useState<boolean>(() => {
+    return !!localStorage.getItem('lifeline_theme_selected');
+  });
   const [hasMeshPermissions, setHasMeshPermissions] = useState<boolean>(() => {
     return localStorage.getItem('lifeline_mesh_permissions') === 'granted';
   });
@@ -66,7 +73,6 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
     return !!localStorage.getItem('lifeline_user_lang');
   });
   const [showLogoutModal, setShowLogoutModal] = useState<boolean>(false);
-  const [showInstallModal, setShowInstallModal] = useState<boolean>(false);
 
   const handleConfirmLogout = React.useCallback(() => {
     setShowLogoutModal(false);
@@ -82,6 +88,7 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
   React.useEffect(() => {
     if (triggerSplash) {
       setShowSplash(true);
+      setHasSelectedTheme(false);
     }
   }, [triggerSplash]);
 
@@ -110,15 +117,16 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
   if (showSplash) {
     return (
       <div className="smartphone-chassis">
-        <div className="phone-top-bar" style={{ zIndex: 10000 }}>
-          <span>{timeStr}</span>
-          <div className="phone-dynamic-island">
-            <div className="island-camera-lens"></div>
-            <div className="island-sensor"></div>
-          </div>
-          <span>5G • 94%</span>
-        </div>
         <SplashScreen onComplete={handleSplashComplete} durationMs={2800} />
+      </div>
+    );
+  }
+
+  // 1.5. THEME SELECTION SCREEN
+  if (!hasSelectedTheme) {
+    return (
+      <div className="smartphone-chassis">
+        <ThemeSelectionScreen onThemeSelected={() => setHasSelectedTheme(true)} />
       </div>
     );
   }
@@ -127,14 +135,6 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
   if (!hasMeshPermissions) {
     return (
       <div className="smartphone-chassis">
-        <div className="phone-top-bar" style={{ zIndex: 10000 }}>
-          <span>{timeStr}</span>
-          <div className="phone-dynamic-island">
-            <div className="island-camera-lens"></div>
-            <div className="island-sensor"></div>
-          </div>
-          <span>5G • 90%</span>
-        </div>
         <BluetoothWifiPermissionModal onGrantPermissions={handleGrantPermissions} />
       </div>
     );
@@ -144,14 +144,6 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
   if (!hasSelectedLanguage) {
     return (
       <div className="smartphone-chassis">
-        <div className="phone-top-bar">
-          <span>{timeStr}</span>
-          <div className="phone-dynamic-island">
-            <div className="island-camera-lens"></div>
-            <div className="island-sensor"></div>
-          </div>
-          <span>5G • 89%</span>
-        </div>
         <div className="phone-screen-content" style={{ paddingBottom: 0 }}>
           <LanguageSelectionScreen onLanguageSelected={handleLanguageSelected} />
         </div>
@@ -166,7 +158,31 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
         <div className="phone-status-bar">
           <span>{timeStr}</span>
           <div className="phone-dynamic-island" />
-          <span style={{ fontSize: 11, color: '#475569' }}>94%</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              style={{
+                background: 'var(--bg-card-subtle)',
+                border: '1px solid var(--border-card)',
+                color: 'var(--text-main)',
+                borderRadius: 8,
+                padding: '2px 8px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                fontSize: 10,
+                fontWeight: 700
+              }}
+              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              aria-label="Toggle theme"
+            >
+              {theme === 'dark' ? <Sun size={11} color="#FBBF24" /> : <Moon size={11} color="#38BDF8" />}
+              <span>{theme === 'dark' ? 'LIGHT' : 'DARK'}</span>
+            </button>
+            <span style={{ fontSize: 11, color: 'var(--text-sub)' }}>94%</span>
+          </div>
         </div>
         <div className="mobile-screen-body" style={{ paddingBottom: 0 }}>
           <LoginScreen />
@@ -187,7 +203,7 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
             fontSize: 11,
             fontWeight: 700,
             color: activeRole === 'VICTIM' ? '#16A34A' : '#2563EB',
-            background: activeRole === 'VICTIM' ? '#F0FDF4' : '#EFF6FF',
+            background: activeRole === 'VICTIM' ? 'var(--color-safe-light, #F0FDF4)' : 'var(--color-primary-light, #EFF6FF)',
             padding: '2px 8px',
             borderRadius: 10
           }}>
@@ -195,10 +211,31 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
           </span>
           <button
             type="button"
+            onClick={toggleTheme}
+            style={{
+              background: 'var(--bg-card-subtle)',
+              border: '1px solid var(--border-card)',
+              color: 'var(--text-main)',
+              borderRadius: 6,
+              padding: '2px 6px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              fontSize: 10,
+              fontWeight: 700
+            }}
+            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            aria-label="Toggle theme"
+          >
+            {theme === 'dark' ? <Sun size={11} color="#FBBF24" /> : <Moon size={11} color="#38BDF8" />}
+          </button>
+          <button
+            type="button"
             onClick={() => setShowLogoutModal(true)}
             style={{
-              background: '#FEF2F2',
-              border: '1px solid #FECACA',
+              background: 'var(--color-critical-light, #FEF2F2)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
               color: '#DC2626',
               borderRadius: 6,
               padding: '2px 8px',
@@ -273,12 +310,12 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
           ) : (
             /* Account Info View */
             <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 800, color: '#0F172A' }}>{t('navProfile')}</h2>
+              <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-main)' }}>{t('navProfile')}</h2>
 
               <div
                 style={{
-                  background: '#FFFFFF',
-                  border: '1px solid #E2E8F0',
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border-card)',
                   borderRadius: 16,
                   padding: 16,
                   display: 'flex',
@@ -288,28 +325,33 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
                 }}
               >
                 <div>
-                  <span style={{ fontSize: 12, color: '#64748B' }}>Name:</span>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: '#0F172A' }}>{user.name}</div>
+                  <span style={{ fontSize: 12, color: 'var(--text-sub)' }}>Name:</span>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)' }}>{user.name}</div>
                 </div>
                 <div>
-                  <span style={{ fontSize: 12, color: '#64748B' }}>User ID / Account:</span>
-                  <div style={{ fontSize: 14, fontFamily: 'monospace', color: '#2563EB', fontWeight: 700 }}>{user.userId}</div>
+                  <span style={{ fontSize: 12, color: 'var(--text-sub)' }}>User ID / Account:</span>
+                  <div style={{ fontSize: 14, fontFamily: 'monospace', color: 'var(--color-primary)', fontWeight: 700 }}>{user.userId}</div>
                 </div>
                 <div>
-                  <span style={{ fontSize: 12, color: '#64748B' }}>Phone / Emergency Contact:</span>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>{user.emergencyContact || 'Not provided'}</div>
+                  <span style={{ fontSize: 12, color: 'var(--text-sub)' }}>Phone / Emergency Contact:</span>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-main)' }}>{user.emergencyContact || 'Not provided'}</div>
                 </div>
               </div>
 
-              <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 16, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{t('language')}</span>
+              <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: 16, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-main)' }}>Theme / Appearance</span>
+                <ThemeSelector />
+              </div>
+
+              <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-card)', borderRadius: 16, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-main)' }}>{t('language')}</span>
                 <LanguageSelector />
               </div>
 
               {/* Technical Telemetry & Diagnostics */}
               <div style={{
-                background: '#FFFFFF',
-                border: '1px solid #CBD5E1',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-card)',
                 borderRadius: 14,
                 padding: '14px',
                 display: 'flex',
@@ -317,87 +359,42 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
                 gap: 10,
                 fontSize: 12
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #E2E8F0', paddingBottom: 8 }}>
-                  <span style={{ fontWeight: 800, color: '#0F172A', fontSize: 12, letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Activity size={15} color="#2563EB" />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-card)', paddingBottom: 8 }}>
+                  <span style={{ fontWeight: 800, color: 'var(--text-main)', fontSize: 12, letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Activity size={15} color="var(--color-primary)" />
                     HARDWARE & TELEMETRY DIAGNOSTICS
                   </span>
-                  <span style={{ fontSize: 10, background: '#F0FDF4', color: '#16A34A', padding: '2px 8px', borderRadius: 6, fontWeight: 700 }}>
+                  <span style={{ fontSize: 10, background: 'var(--color-safe-light)', color: 'var(--color-safe)', padding: '2px 8px', borderRadius: 6, fontWeight: 700, border: '1px solid var(--border-card)' }}>
                     ACTIVE
                   </span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748B' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-sub)' }}>
                   <span>Raw GPS Coordinates:</span>
-                  <strong style={{ color: '#0F172A', fontFamily: 'monospace' }}>
+                  <strong style={{ color: 'var(--text-main)', fontFamily: 'monospace' }}>
                     {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
                   </strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748B' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-sub)' }}>
                   <span>GPS Precision:</span>
-                  <strong style={{ color: '#2563EB' }}>±{location.accuracy} meters</strong>
+                  <strong style={{ color: 'var(--color-primary)' }}>±{location.accuracy} meters</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748B' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-sub)' }}>
                   <span>Cellular Network:</span>
-                  <strong style={{ color: '#DC2626' }}>OFFLINE (Tower Failure)</strong>
+                  <strong style={{ color: 'var(--color-critical)' }}>OFFLINE (Tower Failure)</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748B' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-sub)' }}>
                   <span>Mesh Network Engine:</span>
-                  <strong style={{ color: '#16A34A' }}>Store-Carry-Forward P2P</strong>
+                  <strong style={{ color: 'var(--color-safe)' }}>Store-Carry-Forward P2P</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748B' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-sub)' }}>
                   <span>Battery State:</span>
-                  <strong style={{ color: '#D97706' }}>85% • Low Power Mode</strong>
+                  <strong style={{ color: 'var(--color-warning)' }}>85% • Low Power Mode</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748B' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-sub)' }}>
                   <span>Cryptography:</span>
-                  <strong style={{ color: '#2563EB' }}>AES-GCM + HMAC-SHA256</strong>
+                  <strong style={{ color: 'var(--color-primary)' }}>AES-GCM + HMAC-SHA256</strong>
                 </div>
               </div>
-
-              {/* Install APK / Real Phone Button */}
-              <button
-                type="button"
-                onClick={() => setShowInstallModal(true)}
-                style={{
-                  height: 48,
-                  background: '#EFF6FF',
-                  border: '1px solid #BFDBFE',
-                  color: '#2563EB',
-                  borderRadius: 12,
-                  fontWeight: 700,
-                  fontSize: 14,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8
-                }}
-              >
-                <Smartphone size={16} />
-                <span>Install APK on Android Phone</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={syncWithCloud}
-                style={{
-                  height: 48,
-                  background: '#F1F5F9',
-                  border: '1px solid #CBD5E1',
-                  color: '#0F172A',
-                  borderRadius: 12,
-                  fontWeight: 700,
-                  fontSize: 14,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8
-                }}
-              >
-                <RefreshCw size={16} />
-                <span>{syncPending ? 'Syncing Data...' : 'Sync Data Offline/Cloud'}</span>
-              </button>
 
               <button
                 type="button"
@@ -420,10 +417,6 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
                 <LogOut size={16} />
                 <span>{t('switchRole')} / Logout</span>
               </button>
-
-              {showInstallModal && (
-                <InstallOnPhoneModal onClose={() => setShowInstallModal(false)} />
-              )}
             </div>
           )
         ) : (
@@ -543,6 +536,14 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
                 <LogOut size={20} color="#DC2626" />
               </div>
               <span style={{ color: '#DC2626' }}>Logout</span>
+            </button>
+
+            <button
+              className="nav-item-btn"
+              onClick={() => setShowLogoutModal(true)}
+            >
+              <LogOut size={18} color="#EF4444" />
+              <span style={{ color: '#EF4444' }}>Logout</span>
             </button>
           </>
         )}

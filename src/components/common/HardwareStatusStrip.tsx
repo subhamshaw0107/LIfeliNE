@@ -30,7 +30,7 @@ export const HardwareStatusStrip: React.FC = () => {
       {/* GPS Status */}
       <div className="hardware-pill">
         <Navigation size={14} color="#16A34A" />
-        <span style={{ color: '#0F172A' }}>GPS ±{location.accuracy}m</span>
+        <span style={{ color: 'var(--text-main)' }}>GPS ±{location.accuracy}m</span>
       </div>
 
       {/* Mesh Radio Status */}
@@ -48,8 +48,8 @@ export const HardwareStatusStrip: React.FC = () => {
 
       {/* Battery */}
       <div className="hardware-pill">
-        <BatteryCharging size={14} color="#64748B" />
-        <span>85%</span>
+        <BatteryCharging size={14} color="var(--text-sub)" />
+        <span style={{ color: 'var(--text-main)' }}>85%</span>
       </div>
     </div>
   );

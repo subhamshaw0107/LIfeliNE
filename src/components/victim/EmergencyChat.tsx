@@ -53,7 +53,7 @@ export const EmergencyChat: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           <ArrowLeft size={16} />
           <span>Back</span>
         </button>
-        <div style={{ fontWeight: 800, fontSize: 16, color: '#0F172A' }}>
+        <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--text-main)' }}>
           {t('chatHeader')}
         </div>
         <div style={{ width: 40 }} />
@@ -64,12 +64,12 @@ export const EmergencyChat: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       {/* Notice Banner */}
       <div
         style={{
-          background: '#EFF6FF',
-          border: '1px solid #BFDBFE',
+          background: 'var(--color-primary-light, #EFF6FF)',
+          border: '1px solid var(--border-card-highlight)',
           borderRadius: 12,
           padding: '10px 12px',
           fontSize: 12,
-          color: '#1E40AF',
+          color: 'var(--color-primary)',
           lineHeight: 1.4
         }}
       >
@@ -79,7 +79,7 @@ export const EmergencyChat: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
       {/* Predefined 1-Tap Messages */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-main)' }}>
           {t('presetHeader')}
         </div>
 
@@ -92,8 +92,8 @@ export const EmergencyChat: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 onClick={() => handleSend(item.text)}
                 disabled={isSending}
                 style={{
-                  background: '#FFFFFF',
-                  border: '1px solid #CBD5E1',
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border-card)',
                   borderRadius: 12,
                   padding: '12px 10px',
                   display: 'flex',
@@ -101,7 +101,7 @@ export const EmergencyChat: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   gap: 8,
                   textAlign: 'left',
                   cursor: 'pointer',
-                  color: '#0F172A',
+                  color: 'var(--text-main)',
                   fontSize: 13,
                   fontWeight: 600,
                   boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
@@ -125,11 +125,11 @@ export const EmergencyChat: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           style={{
             flex: 1,
             height: 48,
-            background: '#FFFFFF',
-            border: '1px solid #CBD5E1',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-card)',
             borderRadius: 12,
             padding: '0 14px',
-            color: '#0F172A',
+            color: 'var(--text-main)',
             fontSize: 14,
             outline: 'none'
           }}
@@ -159,12 +159,12 @@ export const EmergencyChat: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
       {/* Sent History */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-main)' }}>
           {t('sentHistoryHeader')} ({myMessages.length}):
         </div>
 
         {myMessages.length === 0 ? (
-          <div style={{ fontSize: 13, color: '#64748B', textAlign: 'center', padding: '16px', background: '#FFFFFF', borderRadius: 12, border: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: 13, color: 'var(--text-sub)', textAlign: 'center', padding: '16px', background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-card)' }}>
             No emergency messages sent yet.
           </div>
         ) : (
@@ -172,8 +172,8 @@ export const EmergencyChat: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             <div
               key={idx}
               style={{
-                background: '#FFFFFF',
-                border: '1px solid #E2E8F0',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-card)',
                 borderRadius: 12,
                 padding: '10px 14px',
                 display: 'flex',
@@ -182,12 +182,12 @@ export const EmergencyChat: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                <span style={{ fontFamily: 'monospace', color: '#2563EB', fontWeight: 700 }}>
+                <span style={{ fontFamily: 'monospace', color: 'var(--color-primary)', fontWeight: 700 }}>
                   {msg.id}
                 </span>
-                <span style={{ color: '#64748B' }}>{msg.timeFormatted}</span>
+                <span style={{ color: 'var(--text-sub)' }}>{msg.timeFormatted}</span>
               </div>
-              <div style={{ color: '#0F172A', fontWeight: 600, fontSize: 14 }}>
+              <div style={{ color: 'var(--text-main)', fontWeight: 600, fontSize: 14 }}>
                 "{msg.message}"
               </div>
             </div>

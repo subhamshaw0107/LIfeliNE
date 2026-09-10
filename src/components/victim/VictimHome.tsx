@@ -225,8 +225,8 @@ export const VictimHome: React.FC<Props> = ({
       {/* 2. Safety Status Banner */}
       <section
         style={{
-          background: riskEval.riskLevel === 'CRITICAL' ? '#FEF2F2' : riskEval.riskLevel === 'WARNING' ? '#FFFBEB' : '#F0FDF4',
-          border: `1.5px solid ${riskEval.riskLevel === 'CRITICAL' ? '#FECACA' : riskEval.riskLevel === 'WARNING' ? '#FDE68A' : '#BBF7D0'}`,
+          background: riskEval.riskLevel === 'CRITICAL' ? 'var(--color-critical-light)' : riskEval.riskLevel === 'WARNING' ? 'var(--color-warning-light)' : 'var(--color-safe-light)',
+          border: `1.5px solid ${riskEval.riskLevel === 'CRITICAL' ? 'rgba(239, 68, 68, 0.4)' : riskEval.riskLevel === 'WARNING' ? 'rgba(245, 158, 11, 0.4)' : 'rgba(16, 185, 129, 0.4)'}`,
           borderRadius: 14,
           padding: '12px 14px',
           display: 'flex',
@@ -237,7 +237,7 @@ export const VictimHome: React.FC<Props> = ({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
-            color: riskEval.riskLevel === 'CRITICAL' ? '#DC2626' : riskEval.riskLevel === 'WARNING' ? '#D97706' : '#16A34A',
+            color: riskEval.riskLevel === 'CRITICAL' ? '#EF4444' : riskEval.riskLevel === 'WARNING' ? '#F59E0B' : '#10B981',
             display: 'flex',
             alignItems: 'center'
           }}>
@@ -247,14 +247,14 @@ export const VictimHome: React.FC<Props> = ({
             <h2 style={{
               fontSize: 14,
               fontWeight: 900,
-              color: riskEval.riskLevel === 'CRITICAL' ? '#DC2626' : riskEval.riskLevel === 'WARNING' ? '#B45309' : '#15803D',
+              color: riskEval.riskLevel === 'CRITICAL' ? '#EF4444' : riskEval.riskLevel === 'WARNING' ? '#F59E0B' : '#10B981',
               margin: 0
             }}>
               {riskEval.riskLevel === 'CRITICAL' && 'YOU ARE IN DANGER'}
               {riskEval.riskLevel === 'WARNING' && 'WARNING: NEAR HAZARD'}
               {riskEval.riskLevel === 'SAFE' && 'YOU ARE IN A SAFE AREA'}
             </h2>
-            <p style={{ fontSize: 12, color: '#475569', margin: '2px 0 0 0', fontWeight: 500 }}>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '2px 0 0 0', fontWeight: 500 }}>
               {riskEval.riskLevel === 'CRITICAL' &&
                 (riskEval.distanceKm <= 0.1
                   ? `${riskEval.closestZone.name} • Inside Hazard Zone`
@@ -497,7 +497,7 @@ export const VictimHome: React.FC<Props> = ({
 
       {/* 5. 4 Quick Category Emergency Buttons */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', margin: 0 }}>
+        <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>
           {t('quickCategoriesTitle')}
         </h3>
 
@@ -552,30 +552,30 @@ export const VictimHome: React.FC<Props> = ({
       {nearestShelter && (
         <section
           style={{
-            background: '#FFFFFF',
-            border: '1px solid #E2E8F0',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-card)',
             borderRadius: 14,
             padding: '14px',
             display: 'flex',
             flexDirection: 'column',
             gap: 10,
-            boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
+            boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
           }}
           aria-label="Nearest safe shelter"
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Home size={18} color="#2563EB" />
-              <span style={{ fontSize: 13, fontWeight: 800, color: '#0F172A' }}>Nearest Safe Shelter</span>
+              <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-main)' }}>Nearest Safe Shelter</span>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#2563EB', background: '#EFF6FF', padding: '2px 8px', borderRadius: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#2563EB', background: 'var(--color-primary-light, #EFF6FF)', padding: '2px 8px', borderRadius: 8 }}>
               {nearestShelter.distKm} km away
             </span>
           </div>
 
           <div>
-            <h4 style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', margin: '0 0 2px 0' }}>{nearestShelter.name}</h4>
-            <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>{nearestShelter.status}</p>
+            <h4 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-main)', margin: '0 0 2px 0' }}>{nearestShelter.name}</h4>
+            <p style={{ fontSize: 12, color: 'var(--text-sub)', margin: 0 }}>{nearestShelter.status}</p>
           </div>
 
           <button
@@ -583,10 +583,10 @@ export const VictimHome: React.FC<Props> = ({
             onClick={onNavigateToMap}
             style={{
               height: 40,
-              background: '#F1F5F9',
-              border: '1px solid #CBD5E1',
+              background: 'var(--bg-card-subtle)',
+              border: '1px solid var(--border-card)',
               borderRadius: 10,
-              color: '#0F172A',
+              color: 'var(--text-main)',
               fontWeight: 700,
               fontSize: 12,
               cursor: 'pointer',
@@ -605,22 +605,22 @@ export const VictimHome: React.FC<Props> = ({
       {/* 7. Emergency Survival Tips */}
       <section
         style={{
-          background: '#FFFFFF',
-          border: '1px solid #E2E8F0',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-card)',
           borderRadius: 14,
           padding: '14px',
           display: 'flex',
           flexDirection: 'column',
           gap: 8,
-          boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
+          boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
         }}
         aria-label="Emergency survival tips"
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <Info size={16} color="#2563EB" />
-          <h4 style={{ fontSize: 13, fontWeight: 800, color: '#0F172A', margin: 0 }}>Emergency Survival Tips</h4>
+          <h4 style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>Emergency Survival Tips</h4>
         </div>
-        <ul style={{ paddingLeft: 18, margin: 0, fontSize: 12, color: '#475569', display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <ul style={{ paddingLeft: 18, margin: 0, fontSize: 12, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 4 }}>
           <li>Move to higher ground immediately if in a flood hazard zone.</li>
           <li>Stay clear of fallen power lines and damaged structures.</li>
           <li>Conserve phone battery; LIFELINE broadcasts in low-power bursts.</li>

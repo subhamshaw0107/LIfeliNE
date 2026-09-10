@@ -21,14 +21,14 @@ export const SosTrackerCard: React.FC<Props> = ({ packet: propPacket, onInspect 
     <div className="sos-tracker-card">
       <div className="sos-tracker-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 13, fontWeight: 800, color: '#0F172A' }}>
+          <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-main)' }}>
             {t('trackerTitle')}
           </span>
-          <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#2563EB', background: '#EFF6FF', padding: '2px 6px', borderRadius: 6 }}>
+          <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--color-primary)', background: 'var(--color-primary-light)', border: '1px solid var(--border-card)', padding: '2px 6px', borderRadius: 6 }}>
             {packet.id}
           </span>
         </div>
-        <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>
+        <span style={{ fontSize: 11, color: 'var(--text-sub)', fontWeight: 600 }}>
           {packet.timeFormatted}
         </span>
       </div>
@@ -49,7 +49,7 @@ export const SosTrackerCard: React.FC<Props> = ({ packet: propPacket, onInspect 
         {/* Step 2: Mesh Relayed */}
         <div className={`tracker-step-item ${isDelivered ? 'completed' : ''}`}>
           <div className="step-indicator">
-            {isDelivered ? <Check size={14} /> : <Radio size={14} color="#D97706" />}
+            {isDelivered ? <Check size={14} /> : <Radio size={14} color="var(--color-warning)" />}
           </div>
           <div className="step-content">
             <div className="step-title">{t('step2')}</div>
@@ -70,7 +70,7 @@ export const SosTrackerCard: React.FC<Props> = ({ packet: propPacket, onInspect 
       </div>
 
       {/* Security info */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#16A34A', background: '#F0FDF4', padding: '8px 10px', borderRadius: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-safe)', background: 'var(--color-safe-light)', border: '1px solid var(--border-card)', padding: '8px 10px', borderRadius: 10 }}>
         <ShieldCheck size={16} />
         <span style={{ fontWeight: 600 }}>Authenticated Encrypted Packet (AES-GCM)</span>
       </div>
@@ -80,12 +80,12 @@ export const SosTrackerCard: React.FC<Props> = ({ packet: propPacket, onInspect 
           onClick={onInspect}
           style={{
             height: 38,
-            background: '#F1F5F9',
-            border: '1px solid #CBD5E1',
+            background: 'var(--bg-card-subtle)',
+            border: '1px solid var(--border-card)',
             borderRadius: 8,
             fontSize: 12,
             fontWeight: 700,
-            color: '#0F172A',
+            color: 'var(--text-main)',
             cursor: 'pointer'
           }}
         >

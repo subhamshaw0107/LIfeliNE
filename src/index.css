@@ -4,11 +4,12 @@
    "Understand in 2 seconds. Operate in 1 tap."
    ========================================================================== */
 
-:root {
+:root,
+[data-theme="light"] {
   --font-main: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
-  /* Primary Theme Colors */
+  /* Primary Theme Colors - Light Mode */
   --bg-app: #F1F5F9;           /* Slate 100 - Clean light background */
   --bg-device: #FFFFFF;        /* Crisp White phone chassis */
   --bg-card: #FFFFFF;          /* Pure White cards */
@@ -40,6 +41,36 @@
   --phone-width: 440px;
   --phone-height: min(890px, calc(100vh - 76px));
   --phone-radius: 36px;
+}
+
+[data-theme="dark"] {
+  /* Primary Theme Colors - Dark Mode (Consistent with Splash/Hardware Access) */
+  --bg-app: #040711;           /* Deep dark atmospheric space */
+  --bg-device: #090E1A;        /* Dark sleek phone chassis */
+  --bg-card: #0F172A;          /* Slate 900 dark card */
+  --bg-card-subtle: #131B2E;   /* Inner container background */
+  --border-card: rgba(255, 255, 255, 0.12); /* Subtle crisp border */
+  --border-card-highlight: rgba(56, 189, 248, 0.35); /* Neon sky highlight */
+
+  /* Semantic Emergency Colors */
+  --color-primary: #38BDF8;        /* Sky Blue 400 - Radiant accent */
+  --color-primary-light: rgba(56, 189, 248, 0.16); /* Active glow */
+  --color-primary-dark: #0284C7;
+
+  --color-critical: #EF4444;       /* Bright emergency red */
+  --color-critical-light: rgba(239, 68, 68, 0.18);
+  --color-critical-dark: #F87171;
+
+  --color-warning: #F59E0B;        /* High-visibility amber */
+  --color-warning-light: rgba(245, 158, 11, 0.18);
+
+  --color-safe: #10B981;           /* Emerald safe */
+  --color-safe-light: rgba(16, 185, 129, 0.18);
+
+  /* Typography Colors */
+  --text-main: #F8FAFC;        /* Crisp white readable text */
+  --text-muted: #CBD5E1;       /* Light slate secondary */
+  --text-sub: #94A3B8;         /* Slate 400 auxiliary text */
 }
 
 * {
@@ -160,7 +191,7 @@ body {
 .role-switcher-group {
   display: flex;
   align-items: center;
-  background: #F1F5F9;
+  background: var(--bg-card-subtle);
   border-radius: 12px;
   padding: 3px;
   border: 1px solid var(--border-card);
@@ -182,10 +213,16 @@ body {
 }
 
 .role-switch-btn.active {
-  background: #FFFFFF;
+  background: var(--bg-card);
   color: var(--color-primary);
   font-weight: 700;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] .role-switch-btn.active {
+  background: rgba(56, 189, 248, 0.16);
+  color: #38BDF8;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
 }
 
 /* Realistic Smartphone Device Chassis */
@@ -211,11 +248,17 @@ body {
   flex-direction: column;
   overflow: hidden;
   flex-shrink: 0;
+  transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+[data-theme="dark"] .smartphone-chassis {
+  border: 8px solid #1E293B;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(56, 189, 248, 0.08);
 }
 
 .phone-status-bar {
   height: 44px;
-  background: #FFFFFF;
+  background: var(--bg-card);
   padding: 0 20px;
   display: flex;
   align-items: center;
@@ -225,6 +268,7 @@ body {
   color: var(--text-main);
   border-bottom: 1px solid var(--border-card);
   z-index: 50;
+  transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
 }
 
 .phone-dynamic-island {
@@ -234,12 +278,19 @@ body {
   border-radius: 12px;
 }
 
+[data-theme="dark"] .phone-dynamic-island {
+  background: #000000;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 .mobile-screen-body {
   flex: 1;
   overflow-y: auto;
   background: var(--bg-card-subtle);
+  color: var(--text-main);
   position: relative;
   padding-bottom: 76px; /* Clearance for bottom nav */
+  transition: background 0.25s ease, color 0.25s ease;
 }
 
 /* Bottom Navigation Bar */
@@ -249,14 +300,22 @@ body {
   left: 0;
   right: 0;
   height: 72px;
-  background: #FFFFFF;
-  border-top: 1px solid var(--border-card-highlight);
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-card);
   display: flex;
   align-items: center;
   justify-content: space-around;
   padding: 0 8px;
   z-index: 80;
   box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.04);
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+
+[data-theme="dark"] .bottom-nav-bar {
+  background: rgba(15, 23, 42, 0.96);
+  backdrop-filter: blur(12px);
+  border-top-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.6);
 }
 
 .nav-tab-btn {
@@ -293,7 +352,7 @@ body {
 
 /* Hardware Status Indicator Strip */
 .hardware-status-strip {
-  background: #FFFFFF;
+  background: var(--bg-card);
   border: 1px solid var(--border-card);
   border-radius: 12px;
   padding: 10px 14px;
@@ -302,6 +361,7 @@ body {
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
 }
 
 .hardware-pill {
@@ -386,7 +446,7 @@ body {
   width: 50px;
   height: 50px;
   border-radius: 14px;
-  background: #F1F5F9;
+  background: var(--bg-card-subtle);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -646,8 +706,8 @@ body {
   font-weight: 700;
   border: 1px solid transparent;
   cursor: pointer;
-  background: #F1F5F9;
-  color: #64748B;
+  background: var(--bg-card-subtle);
+  color: var(--text-muted);
   transition: all 0.15s ease;
 }
 
@@ -667,7 +727,8 @@ body {
 }
 
 .sim-pill.active {
-  background: #E2E8F0;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
   font-weight: 800;
 }
 
@@ -970,7 +1031,7 @@ body {
 
 .category-card-btn {
   height: 76px;
-  background: #FFFFFF;
+  background: var(--bg-card);
   border: 1px solid var(--border-card-highlight);
   border-radius: 14px;
   padding: 12px 14px;
@@ -980,11 +1041,11 @@ body {
   cursor: pointer;
   text-align: left;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
 }
 
 .category-card-btn:active {
-  background: #F8FAFC;
+  background: var(--bg-card-subtle);
   border-color: var(--color-primary);
 }
 
@@ -1006,7 +1067,7 @@ body {
 }
 
 .quick-action-card {
-  background: #FFFFFF;
+  background: var(--bg-card);
   border: 1px solid var(--border-card-highlight);
   border-radius: 14px;
   padding: 12px 14px;
@@ -1022,7 +1083,7 @@ body {
 
 .quick-action-card:hover,
 .quick-action-card:active {
-  background: #F8FAFC;
+  background: var(--bg-card-subtle);
   border-color: var(--color-primary);
   transform: translateY(-1px);
 }
@@ -1310,7 +1371,7 @@ body {
 }
 
 .metric-card {
-  background: #FFFFFF;
+  background: var(--bg-card);
   border: 1px solid var(--border-card);
   border-radius: 14px;
   padding: 12px 10px;
@@ -1319,6 +1380,12 @@ body {
   gap: 4px;
   text-align: center;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+}
+
+[data-theme="dark"] .metric-card {
+  background: #0F172A;
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .metric-number {
@@ -1346,7 +1413,7 @@ body {
 }
 
 .triage-card-item {
-  background: #FFFFFF;
+  background: var(--bg-card);
   border: 1px solid var(--border-card-highlight);
   border-radius: 16px;
   padding: 14px;
@@ -1410,10 +1477,35 @@ body {
   color: #FFFFFF;
 }
 
+[data-theme="dark"] .triage-btn.primary {
+  background: var(--color-primary);
+  color: #040711;
+  font-weight: 800;
+}
+
 .triage-btn.secondary {
-  background: #F1F5F9;
+  background: var(--bg-card-subtle);
   color: var(--text-main);
   border: 1px solid var(--border-card);
+  transition: all 0.2s ease;
+}
+
+.triage-btn.secondary:hover {
+  background: var(--color-primary-light);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+[data-theme="dark"] .triage-btn.secondary {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #F8FAFC;
+}
+
+[data-theme="dark"] .triage-btn.secondary:hover {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: #38BDF8;
+  color: #38BDF8;
 }
 
 /* ==========================================================================
@@ -1430,7 +1522,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #F1F5F9;
+  background: var(--bg-app);
 }
 
 .leaflet-map-container {
@@ -1443,7 +1535,8 @@ body {
   top: 12px;
   left: 12px;
   right: 12px;
-  background: #FFFFFF;
+  background: var(--bg-card);
+  color: var(--text-main);
   border: 1px solid var(--border-card-highlight);
   border-radius: 12px;
   padding: 10px 14px;
@@ -1475,7 +1568,8 @@ body {
 .modal-card {
   width: 100%;
   max-width: 420px;
-  background: #FFFFFF;
+  background: var(--bg-card);
+  color: var(--text-main);
   border: 1px solid var(--border-card-highlight);
   border-radius: 20px;
   padding: 20px;
@@ -1484,7 +1578,13 @@ body {
   gap: 14px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+}
+
+[data-theme="dark"] .modal-card {
+  background: #090E1A;
+  border-color: rgba(56, 189, 248, 0.25);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(56, 189, 248, 0.1);
 }
 
 /* ==========================================================================

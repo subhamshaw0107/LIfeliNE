@@ -25,9 +25,15 @@ import { Capacitor } from '@capacitor/core';
 import { DEMO_STEPS } from '../services/demoRunner';
 import confetti from 'canvas-confetti';
 import { translations, LanguageCode } from '../i18n/translations';
+import { logoutFromFirebase } from '../services/firebase';
 
+
+export type ThemeMode = 'light' | 'dark';
 
 interface AppContextType {
+  theme: ThemeMode;
+  setTheme: (theme: ThemeMode) => void;
+  toggleTheme: () => void;
   language: LanguageCode;
   setLanguage: (lang: LanguageCode) => void;
   t: (key: string) => string;
@@ -218,6 +224,40 @@ async function getDeviceBatteryLevel(): Promise<number> {
 }
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+
+  // Theme state ('light' | 'dark', persisted locally, defaults to 'dark')
+  const [theme, setThemeState] = useState<ThemeMode>(() => {
+    try {
+      const saved = localStorage.getItem('lifeline_theme');
+      if (saved === 'light' || saved === 'dark') return saved;
+    } catch (e) {
+      console.error(e);
+    }
+    return 'dark';
+  });
+
+  const setTheme = useCallback((newTheme: ThemeMode) => {
+    setThemeState(newTheme);
+    try {
+      localStorage.setItem('lifeline_theme', newTheme);
+    } catch (e) {
+      console.error(e);
+    }
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', newTheme);
+    }
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setTheme(theme === 'dark' ? 'light' : 'dark');
+  }, [theme, setTheme]);
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', theme);
+    }
+  }, [theme]);
+
   // Localization state (defaults to English 'en')
   const [language, setLanguage] = useState<LanguageCode>('en');
 
@@ -225,6 +265,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const langDict = translations[language] || translations['en'];
     return langDict[key] || translations['en'][key] || key;
   }, [language]);
+
 
   // Session-based user authentication:
   // Fresh app launch requires login every time (per requirement).
@@ -420,6 +461,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       sessionStorage.removeItem('lifeline_session_user');
       localStorage.removeItem('lifeline_authenticated_user');
+      void logoutFromFirebase();
     } catch (e) {
       console.error(e);
     }
@@ -815,6 +857,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   return (
     <AppContext.Provider
       value={{
+        theme,
+        setTheme,
+        toggleTheme,
         language,
         setLanguage,
         t,

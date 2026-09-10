@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { cryptoService } from '../../services/cryptoService';
-import { User, Mail, Phone, Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { User, Mail, Phone, Lock, Eye, EyeOff, ArrowLeft, Loader2 } from 'lucide-react';
 import { UserAccount } from '../../types';
+import { isFirebaseConfigured, registerWithFirebase } from '../../services/firebase';
 
 interface Props {
   onNavigateToLogin: () => void;
@@ -19,13 +20,14 @@ export const RegistrationScreen: React.FC<Props> = ({ onNavigateToLogin }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
-    if (!fullName.trim() || !phone.trim() || !password.trim()) {
-      setErrorMsg('Please fill in Full Name, Phone Number, and Password.');
+    if (!fullName.trim() || !phone.trim() || !password.trim() || !email.trim()) {
+      setErrorMsg('Please fill in Full Name, Email, Phone Number, and Password.');
       return;
     }
 
@@ -39,16 +41,43 @@ export const RegistrationScreen: React.FC<Props> = ({ onNavigateToLogin }) => {
       return;
     }
 
-    const deviceId = cryptoService.getOrCreateDeviceId();
-    const account: UserAccount = {
-      userId: phone.trim() || email.trim() || `usr_${Date.now().toString(36)}`,
-      name: fullName.trim(),
-      phoneId: deviceId,
-      role: 'VICTIM',
-      emergencyContact: phone.trim()
-    };
+    setIsLoading(true);
 
-    login(account);
+    try {
+      if (isFirebaseConfigured()) {
+        const account = await registerWithFirebase({
+          fullName: fullName.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          password,
+          role: 'VICTIM'
+        });
+        login(account);
+      } else {
+        const deviceId = cryptoService.getOrCreateDeviceId();
+        const account: UserAccount = {
+          userId: phone.trim() || email.trim() || `usr_${Date.now().toString(36)}`,
+          name: fullName.trim(),
+          phoneId: deviceId,
+          role: 'VICTIM',
+          emergencyContact: phone.trim()
+        };
+        login(account);
+      }
+    } catch (err: any) {
+      console.error('[LIFELINE Registration Error]', err);
+      let msg = err?.message || 'Failed to create account.';
+      if (err?.code === 'auth/email-already-in-use') {
+        msg = 'An account with this email already exists. Please log in instead.';
+      } else if (err?.code === 'auth/invalid-email') {
+        msg = 'Please enter a valid email address.';
+      } else if (err?.code === 'auth/weak-password') {
+        msg = 'Password is too weak. Please use at least 6 characters.';
+      }
+      setErrorMsg(msg);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -188,8 +217,28 @@ export const RegistrationScreen: React.FC<Props> = ({ onNavigateToLogin }) => {
           </div>
 
           {/* Submit Button */}
-          <button type="submit" className="auth-primary-btn" style={{ marginTop: 6 }}>
-            CREATE ACCOUNT
+          <button
+            type="submit"
+            className="auth-primary-btn"
+            disabled={isLoading}
+            style={{
+              marginTop: 6,
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              opacity: isLoading ? 0.75 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8
+            }}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                <span>Creating Account in Firebase...</span>
+              </>
+            ) : (
+              <span>CREATE ACCOUNT</span>
+            )}
           </button>
 
           {/* Back to Login */}
