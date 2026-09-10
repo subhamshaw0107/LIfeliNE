@@ -46,11 +46,6 @@ export const RegistrationScreen: React.FC<Props> = ({ onNavigateToLogin }) => {
       return;
     }
 
-    if (!isFirebaseConfigured()) {
-      setErrorMsg('Firebase Authentication is not configured. Please add your Firebase credentials to `.env.local` to register.');
-      return;
-    }
-
     setIsLoading(true);
 
     try {

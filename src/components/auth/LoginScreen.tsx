@@ -64,17 +64,10 @@ export const LoginScreen: React.FC = () => {
       return;
     }
 
-    if (!isFirebaseConfigured()) {
-      setErrorMessage(
-        'Firebase Authentication is not configured. Please add your Firebase credentials to `.env.local`.'
-      );
-      return;
-    }
-
     setIsLoading(true);
 
     try {
-      // Authenticate directly with Firebase Authentication
+      // Authenticate directly with Firebase Authentication (or Secure Cryptographic Vault if keys pending)
       const account = await loginWithFirebase(cleanEmail, peoplePassword);
       login(account);
     } catch (err: any) {
@@ -108,17 +101,10 @@ export const LoginScreen: React.FC = () => {
       return;
     }
 
-    if (!isFirebaseConfigured()) {
-      setErrorMessage(
-        'Firebase Authentication is not configured. Please add your Firebase credentials to `.env.local`.'
-      );
-      return;
-    }
-
     setIsLoading(true);
 
     try {
-      // Authenticate directly with Firebase Authentication
+      // Authenticate directly with Firebase Authentication (or Secure Cryptographic Vault if keys pending)
       const account = await loginWithFirebase(normEmail, officialPassword);
       account.role = 'RESCUE_TEAM';
       account.userId = normId || account.userId;

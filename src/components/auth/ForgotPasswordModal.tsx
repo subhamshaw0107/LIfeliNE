@@ -24,11 +24,6 @@ export const ForgotPasswordModal: React.FC<Props> = ({ onBackToLogin }) => {
       return;
     }
 
-    if (!isFirebaseConfigured()) {
-      setErrorMessage('Firebase Authentication is not configured. Please check `.env.local`.');
-      return;
-    }
-
     setIsLoading(true);
 
     try {
