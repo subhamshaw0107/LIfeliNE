@@ -4,6 +4,14 @@ import { RESCUE_HEADQUARTERS, SAFE_SHELTERS } from '../../services/geoService';
 import { HardwareStatusStrip } from '../common/HardwareStatusStrip';
 import { Navigation, AlertTriangle, ShieldCheck, WifiOff, Globe, Layers, CheckCircle2 } from 'lucide-react';
 import L from 'leaflet';
+import {
+  KALYANI_STATION_COORDS,
+  JIS_COLLEGE_COORDS,
+  KALYANI_CORRIDOR_BOUNDS,
+  KALYANI_ROAD_CORRIDOR
+} from '../../data/kalyaniDemoCorridor';
+
+import KalyaniMap from '../KalyaniMap';
 
 interface Props {
   isRescueView?: boolean;
@@ -357,199 +365,6 @@ export const TacticalMap: React.FC<Props> = ({ isRescueView = false, onSelectSos
     activeRedAlertBanner
   ]);
 
-  // ==========================================
-  // 2. OFFLINE TACTICAL LEAFLET ENGINE (100% RELIABLE)
-  // ==========================================
-  useEffect(() => {
-    if (mapEngine !== 'LEAFLET' || !leafletMapDivRef.current || simulateOfflineMapTiles) return;
-
-    if (!leafletMapInstanceRef.current) {
-      const map = L.map(leafletMapDivRef.current, {
-        center: [22.9785, 88.4395],
-        zoom: 14,
-        zoomControl: true,
-        attributionControl: false
-      });
-
-      // CartoDB dark tiles (public raster, no API key) with required attribution.
-      // Offline handling: failed tile images are hidden so hazard zones,
-      // SOS pins, and grid overlays keep rendering on a clean canvas.
-      const baseTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-        subdomains: 'abcd',
-        maxZoom: 19
-      });
-      baseTiles.on('tileerror', (e: L.TileEvent) => {
-        const tile = e.tile as HTMLImageElement | undefined;
-        if (tile) tile.style.display = 'none';
-      });
-      baseTiles.addTo(map);
-
-      const markersGroup = L.layerGroup().addTo(map);
-      leafletMarkersRef.current = markersGroup;
-      leafletMapInstanceRef.current = map;
-    }
-
-    const map = leafletMapInstanceRef.current;
-    const layer = leafletMarkersRef.current;
-    if (!map || !layer) return;
-
-    layer.clearLayers();
-
-    // 1. 🔴 RED AREA (Flood Hazard Core)
-    disasterZones.forEach(zone => {
-      // Red core circle
-      L.circle([zone.latitude, zone.longitude], {
-        radius: zone.radiusKm * 1000,
-        color: '#EF4444',
-        fillColor: '#EF4444',
-        fillOpacity: 0.32,
-        weight: 3,
-        dashArray: '6, 6'
-      })
-        .bindPopup(`
-          <div style="font-family:sans-serif; color:#0F172A; padding:4px;">
-            <div style="background:#EF4444; color:#FFF; font-size:10px; font-weight:800; padding:2px 6px; border-radius:4px; display:inline-block;">🔴 RED DISASTER AREA</div>
-            <h4 style="margin:4px 0 2px; color:#EF4444; font-size:13px;">${zone.name}</h4>
-            <p style="margin:0; font-size:11px; color:#475569;">${zone.description}</p>
-            <p style="margin:4px 0 0; font-weight:bold; color:#EF4444; font-size:10px;">AUTOMATIC PRIORITY: CRITICAL</p>
-          </div>
-        `)
-        .addTo(layer);
-
-      // Warning buffer
-      L.circle([zone.latitude, zone.longitude], {
-        radius: (zone.radiusKm + 1.2) * 1000,
-        color: '#F59E0B',
-        fillColor: '#F59E0B',
-        fillOpacity: 0.08,
-        weight: 1.5,
-        dashArray: '4, 4'
-      }).addTo(layer);
-
-      // Red Area Label Marker
-      const redIcon = L.divIcon({
-        className: 'red-area-label',
-        html: `<div style="background:#EF4444; color:#FFF; font-size:10px; font-weight:900; padding:3px 8px; border-radius:12px; border:2px solid #FFF; box-shadow:0 0 15px rgba(239,68,68,0.8); white-space:nowrap; text-align:center;">🔴 RED AREA</div>`,
-        iconSize: [90, 24],
-        iconAnchor: [45, 12]
-      });
-      L.marker([zone.latitude, zone.longitude], { icon: redIcon })
-        .bindPopup(`<b>🔴 RED AREA: ${zone.name}</b><br>${zone.description}`)
-        .addTo(layer);
-    });
-
-    // 2. 🟢 GREEN AREA (Safe Relief Shelters)
-    SAFE_SHELTERS.forEach(shelter => {
-      L.circle([shelter.latitude, shelter.longitude], {
-        radius: 500,
-        color: '#10B981',
-        fillColor: '#10B981',
-        fillOpacity: 0.3,
-        weight: 2.5
-      })
-        .bindPopup(`
-          <div style="font-family:sans-serif; color:#0F172A; padding:4px;">
-            <div style="background:#10B981; color:#FFF; font-size:10px; font-weight:800; padding:2px 6px; border-radius:4px; display:inline-block;">🟢 GREEN SAFE ZONE</div>
-            <h4 style="margin:4px 0 2px; color:#10B981; font-size:13px;">${shelter.name}</h4>
-            <p style="margin:0; font-size:11px; color:#475569;">Capacity: ${shelter.capacity} people | Supplies Ready</p>
-          </div>
-        `)
-        .addTo(layer);
-
-      const greenIcon = L.divIcon({
-        className: 'green-area-label',
-        html: `<div style="background:#10B981; color:#FFF; font-size:10px; font-weight:900; padding:3px 8px; border-radius:12px; border:2px solid #FFF; box-shadow:0 0 15px rgba(16,185,129,0.8); white-space:nowrap; text-align:center;">🟢 GREEN AREA</div>`,
-        iconSize: [100, 24],
-        iconAnchor: [50, 12]
-      });
-      L.marker([shelter.latitude, shelter.longitude], { icon: greenIcon })
-        .bindPopup(`<b>🟢 GREEN AREA: ${shelter.name}</b><br>Capacity: ${shelter.capacity}`)
-        .addTo(layer);
-    });
-
-    // 3. 🛡️ RESCUE HEADQUARTERS
-    const hqIcon = L.divIcon({
-      className: 'hq-marker-label',
-      html: `<div style="background:#F59E0B; color:#000; font-size:10px; font-weight:900; padding:3px 8px; border-radius:12px; border:2px solid #FFF; box-shadow:0 0 15px rgba(245,158,11,0.8); white-space:nowrap;">🛡️ RESCUE HQ</div>`,
-      iconSize: [90, 24],
-      iconAnchor: [45, 12]
-    });
-    L.marker([RESCUE_HEADQUARTERS.latitude, RESCUE_HEADQUARTERS.longitude], { icon: hqIcon })
-      .bindPopup(`<b>🛡️ RESCUE CENTER GATEWAY</b><br>Coord: ${RESCUE_HEADQUARTERS.latitude}, ${RESCUE_HEADQUARTERS.longitude}`)
-      .addTo(layer);
-
-    // 4. 📍 VICTIM YOU ARE HERE PIN
-    const myIcon = L.divIcon({
-      className: 'custom-victim-pin',
-      html: `<div style="background:#38BDF8; width:22px; height:22px; border-radius:50%; border:3px solid #FFF; box-shadow:0 0 20px #38BDF8; display:flex; align-items:center; justify-content:center; color:#000; font-weight:900; font-size:9px;">📍</div>`,
-      iconSize: [22, 22],
-      iconAnchor: [11, 11]
-    });
-    L.marker([location.latitude, location.longitude], { icon: myIcon })
-      .bindPopup(`<b>📍 YOU ARE HERE</b><br>Coords: ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`)
-      .addTo(layer);
-
-    // 5. 🚨 ALL ACTIVE SOS REQUESTS
-    sosList.forEach(sos => {
-      const isCritical = sos.priority === 'CRITICAL';
-      const color = isCritical ? '#EF4444' : sos.priority === 'HIGH' ? '#F59E0B' : '#10B981';
-      const sosIcon = L.divIcon({
-        className: 'sos-marker-pin',
-        html: `<div style="background:${color}; width:18px; height:18px; border-radius:50%; border:2px solid #FFF; box-shadow:0 0 12px ${color};"></div>`,
-        iconSize: [18, 18],
-        iconAnchor: [9, 9]
-      });
-
-      const m = L.marker([sos.latitude, sos.longitude], { icon: sosIcon })
-        .bindPopup(`
-          <div style="font-family:sans-serif; color:#0F172A; padding:4px;">
-            <span style="background:${color}; color:#FFF; font-size:10px; font-weight:800; padding:2px 6px; border-radius:4px;">${sos.priority} SOS</span>
-            <h4 style="margin:4px 0 2px; font-size:13px; color:${color};">${sos.id}</h4>
-            <p style="margin:0; font-size:11px;">Sender: <strong>${sos.senderId || 'PERSON-A'}</strong></p>
-            <p style="margin:2px 0 0; font-size:11px; font-style:italic;">"${sos.message}"</p>
-          </div>
-        `)
-        .addTo(layer);
-
-      if (onSelectSos) {
-        m.on('click', () => onSelectSos(sos.id));
-      }
-    });
-
-    // 6. 🚨 POPUP IF PERSON IN RED AREA GIVES SOS!
-    if (activeRedAlertBanner) {
-      const redAlertPopup = L.popup({ autoClose: false, closeOnClick: false })
-        .setLatLng([activeRedAlertBanner.latitude, activeRedAlertBanner.longitude])
-        .setContent(`
-          <div style="font-family:sans-serif; color:#0F172A; padding:6px; min-width:180px;">
-            <div style="background:#EF4444; color:#FFF; font-size:10px; font-weight:900; padding:2px 6px; border-radius:4px; display:inline-block;">
-              🚨 RED AREA SOS TRIGGERED
-            </div>
-            <h4 style="margin:4px 0 2px; color:#EF4444; font-size:13px;">${activeRedAlertBanner.id}</h4>
-            <p style="margin:0; font-size:11px;">Sender: <strong>${activeRedAlertBanner.senderId || 'PERSON-A'}</strong></p>
-            <p style="margin:2px 0 0; font-size:11px; font-weight:800; color:#EF4444;">Priority: CRITICAL</p>
-            <p style="margin:2px 0 0; font-size:11px; font-style:italic;">"${activeRedAlertBanner.message}"</p>
-          </div>
-        `)
-        .openOn(map);
-    }
-
-    // Invalidate map size after mount so tiles load immediately
-    setTimeout(() => map.invalidateSize(), 100);
-    setTimeout(() => map.invalidateSize(), 300);
-    setTimeout(() => map.invalidateSize(), 600);
-
-  }, [
-    mapEngine,
-    simulateOfflineMapTiles,
-    location,
-    disasterZones,
-    sosList,
-    activeRedAlertBanner,
-    onSelectSos
-  ]);
-
   return (
     <div className="map-screen-wrapper">
       {/* 1. Google Maps Container */}
@@ -561,14 +376,18 @@ export const TacticalMap: React.FC<Props> = ({ isRescueView = false, onSelectSos
         }}
       />
 
-      {/* 2. Leaflet Tactical Offline Map Container */}
+      {/* 2. Kalyani Interactive Map Component */}
       <div
-        ref={leafletMapDivRef}
         className="leaflet-map-container"
         style={{
-          display: mapEngine === 'LEAFLET' && !simulateOfflineMapTiles ? 'block' : 'none'
+          display: mapEngine === 'LEAFLET' && !simulateOfflineMapTiles ? 'block' : 'none',
+          position: 'relative',
+          width: '100%',
+          height: '100%'
         }}
-      />
+      >
+        <KalyaniMap isRescueView={isRescueView} onSelectSos={onSelectSos} />
+      </div>
 
       {/* 3. Top Floating Telemetry & Controls */}
       <div
