@@ -43,6 +43,7 @@ export const BluetoothWifiPermissionModal: React.FC<Props> = ({ onGrantPermissio
         style={{
           width: '100%',
           maxWidth: '380px',
+          minWidth: 'min(100%, 300px)',
           background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(9, 14, 28, 0.98) 100%)',
           border: '1.5px solid rgba(56, 189, 248, 0.35)',
           borderRadius: '24px',

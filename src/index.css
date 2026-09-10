@@ -188,10 +188,18 @@ body {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
-/* Smartphone Device Chassis */
-.smartphone-chassis {
+/* Realistic Smartphone Device Chassis */
+#root {
   width: 100%;
-  max-width: var(--phone-width);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.smartphone-chassis {
+  width: var(--phone-width);
+  max-width: 100%;
+  min-width: min(100%, 360px);
   height: var(--phone-height);
   max-height: calc(100vh - 76px);
   background: var(--bg-device);
