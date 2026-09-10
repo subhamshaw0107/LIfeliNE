@@ -673,41 +673,51 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const setRespondingSos = (sosId: string) => {
     audioService.playAcknowledgeChime();
-    void demoMeshNetwork.acknowledgeFromHq(sosId, 'RESPONDING', 'Field rescue vehicle and paramedics deployed to victim coordinates.');
-    const updated = storageService.updateSosStatus(
-      sosId,
-      'RESPONDING',
-      'Field rescue vehicle and paramedics deployed to victim coordinates.',
-      { respondingAt: Date.now() }
-    );
-    if (updated) {
-      setSosList(prev => prev.map(p => p.id === sosId ? { ...p, status: 'RESPONDING', respondingAt: Date.now() } : p));
-      if (victimActiveSos?.id === sosId) {
-        setVictimActiveSos(prev => prev ? { ...prev, status: 'RESPONDING', respondingAt: Date.now() } : null);
+    // Gate UI on the real mesh result (same as acknowledgeSos): only mark
+    // RESPONDING after HQ actually generated and routed the ACK. Failure
+    // leaves the SOS persisted for SCF retry instead of claiming success.
+    void (async () => {
+      const ack = await demoMeshNetwork.acknowledgeFromHq(sosId, 'RESPONDING', 'Field rescue vehicle and paramedics deployed to victim coordinates.');
+      if (!ack) return;
+      const updated = storageService.updateSosStatus(
+        sosId,
+        'RESPONDING',
+        'Field rescue vehicle and paramedics deployed to victim coordinates.',
+        { respondingAt: Date.now() }
+      );
+      if (updated) {
+        setSosList(prev => prev.map(p => p.id === sosId ? { ...p, status: 'RESPONDING', respondingAt: Date.now() } : p));
+        if (victimActiveSos?.id === sosId) {
+          setVictimActiveSos(prev => prev ? { ...prev, status: 'RESPONDING', respondingAt: Date.now() } : null);
+        }
       }
-    }
+    })();
   };
 
   const markRescuedSos = (sosId: string) => {
     audioService.playAcknowledgeChime();
-    try {
-      confetti({ particleCount: 75, spread: 60, origin: { y: 0.6 } });
-    } catch {
-      // ignore
-    }
-    void demoMeshNetwork.acknowledgeFromHq(sosId, 'RESCUED', 'Victim verified safe and evacuated to designated shelter.');
-    const updated = storageService.updateSosStatus(
-      sosId,
-      'RESCUED',
-      'Victim verified safe and evacuated to designated shelter.',
-      { rescuedAt: Date.now() }
-    );
-    if (updated) {
-      setSosList(prev => prev.map(p => p.id === sosId ? { ...p, status: 'RESCUED', rescuedAt: Date.now() } : p));
-      if (victimActiveSos?.id === sosId) {
-        setVictimActiveSos(prev => prev ? { ...prev, status: 'RESCUED', rescuedAt: Date.now() } : null);
+    // Same gating: celebration + RESCUED only after a real routed ACK.
+    void (async () => {
+      const ack = await demoMeshNetwork.acknowledgeFromHq(sosId, 'RESCUED', 'Victim verified safe and evacuated to designated shelter.');
+      if (!ack) return;
+      try {
+        confetti({ particleCount: 75, spread: 60, origin: { y: 0.6 } });
+      } catch {
+        // ignore
       }
-    }
+      const updated = storageService.updateSosStatus(
+        sosId,
+        'RESCUED',
+        'Victim verified safe and evacuated to designated shelter.',
+        { rescuedAt: Date.now() }
+      );
+      if (updated) {
+        setSosList(prev => prev.map(p => p.id === sosId ? { ...p, status: 'RESCUED', rescuedAt: Date.now() } : p));
+        if (victimActiveSos?.id === sosId) {
+          setVictimActiveSos(prev => prev ? { ...prev, status: 'RESCUED', rescuedAt: Date.now() } : null);
+        }
+      }
+    })();
   };
 
   // Cloud sync (manual trigger): delegates to CloudSyncService, which
