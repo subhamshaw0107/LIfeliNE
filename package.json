@@ -37,5 +37,6 @@
     "cross-env": "^7.0.3",
     "typescript": "^5.7.3",
     "vite": "^6.1.0"
-  }
+  },
+  "packageManager": "pnpm@9.15.9"
 }
