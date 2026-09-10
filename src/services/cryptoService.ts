@@ -126,6 +126,50 @@ export type AckVerifyStatus =
   | 'REJECT_UNTRUSTED_PEER';
 
 /**
+ * Canonical fields included in the SOS digital signature.
+ * Excludes mutable relay fields (hopCount, ttl, route, statusHistory, status, forwardingState,
+ * riskLevel, disasterZoneName, distanceFromDisasterKm, distanceFromRescueKm) to allow
+ * multi-hop mesh forwarding without invalidating the cryptographic signature.
+ */
+export interface SosAadFields {
+  id: string;
+  senderId: string;
+  deviceId: string;
+  createdAt: number;
+  latitude: number;
+  longitude: number;
+  priority: string;
+  message?: string;
+  encryptedPayload?: string;
+  iv?: string;
+  recipientId?: string;
+}
+
+/**
+ * Deterministic canonical serialization of immutable SOS packet fields for ECDSA signing.
+ */
+export function buildSosCanonicalString(fields: SosAadFields): string {
+  return [
+    'LIFELINE:SOS-AUTH:v1',
+    `id=${fields.id}`,
+    `senderId=${fields.senderId}`,
+    `deviceId=${fields.deviceId}`,
+    `createdAt=${fields.createdAt}`,
+    `latitude=${fields.latitude}`,
+    `longitude=${fields.longitude}`,
+    `priority=${fields.priority}`,
+    `message=${fields.message || ''}`,
+    `encryptedPayload=${fields.encryptedPayload || ''}`,
+    `iv=${fields.iv || ''}`,
+    `recipientId=${fields.recipientId || ''}`
+  ].join('|');
+}
+
+export function buildSosAad(fields: SosAadFields): Uint8Array {
+  return new TextEncoder().encode(buildSosCanonicalString(fields));
+}
+
+/**
  * Deterministic canonical serialization of immutable packet metadata for AES-GCM AAD.
  * Mutable relay fields (hopCount, ttl, route) are deliberately excluded so relays can forward without invalidating the tag.
  */
@@ -920,6 +964,194 @@ export class CryptoService {
    */
   hasDeviceIdentity(): boolean {
     return this.#identityKeyPair !== null;
+  }
+
+  /**
+   * Derive the stable cryptographic device ID (e.g. DEV-A8F31C) from an ECDSA SPKI public key hex string.
+   */
+  static async deriveDeviceIdFromPublicKey(spkiPublicKeyHex: string): Promise<string> {
+    const crypto = getWebCrypto();
+    const bytes = new Uint8Array(spkiPublicKeyHex.match(/.{1,2}/g)!.map(b => parseInt(b, 16)));
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    const idHex = Array.from(new Uint8Array(digest))
+      .slice(0, 3)
+      .map(b => b.toString(16).toUpperCase().padStart(2, '0'))
+      .join('');
+    return `DEV-${idHex}`;
+  }
+
+  /**
+   * Cryptographically sign an SOS packet using this device's persistent ECDSA P-256 identity key.
+   * Signs the canonical AAD representation containing immutable author fields.
+   * Returns the hex signature and this device's SPKI public key hex.
+   */
+  async signSosPacket(packet: SosPacket): Promise<{ signature: string; publicKeyHex: string }> {
+    const identity = await this.loadOrCreateDeviceIdentity();
+    const crypto = getWebCrypto();
+
+    const aad = buildSosAad({
+      id: packet.id,
+      senderId: packet.senderId,
+      deviceId: packet.deviceId,
+      createdAt: packet.createdAt,
+      latitude: packet.latitude,
+      longitude: packet.longitude,
+      priority: packet.priority,
+      message: packet.message,
+      encryptedPayload: packet.encryptedPayload,
+      iv: packet.iv,
+      recipientId: packet.recipientId
+    });
+
+    // Copy to an exact-length ArrayBuffer: subtle.sign requires a
+    // BufferSource, and the encoder's view must not leak pooled bytes.
+    const aadBytes = new Uint8Array(aad);
+    const signatureBuffer = await crypto.subtle.sign(
+      { name: 'ECDSA', hash: { name: 'SHA-256' } },
+      this.#identityKeyPair!.privateKey,
+      aadBytes.buffer as ArrayBuffer
+    );
+
+    const signatureHex = Array.from(new Uint8Array(signatureBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    return {
+      signature: signatureHex,
+      publicKeyHex: identity.publicKeyHex
+    };
+  }
+
+  /**
+   * Verify an incoming SOS packet's cryptographic signature and identity binding.
+   * 
+   * Identity & Trust Resolution:
+   * 1. If trustedPublicKeyHex is explicitly passed, verify against that key.
+   * 2. If pairingService is provided and packet.deviceId is known in the pairing store:
+   *    - The public key MUST match the paired record's ecdsaPublicKey.
+   *    - If requirePairedPeer is set, the peer must be VERIFIED.
+   * 3. If packet.deviceId equals local deviceId:
+   *    - Public key must match local public identity.
+   * 4. If packet.deviceId matches DEV-XXXXXX format:
+   *    - Verify that the public key's SHA-256 hash mathematically matches the device ID.
+   * 5. Verify the ECDSA P-256 SHA-256 signature against canonical AAD.
+   */
+  async verifySosPacketSignature(
+    packet: SosPacket,
+    options?: {
+      trustedPublicKeyHex?: string;
+      pairingService?: PairingService;
+      requirePairedPeer?: boolean;
+    }
+  ): Promise<{ isValid: boolean; reason: string }> {
+    try {
+      // 1. Check signature presence and format
+      if (!packet.signature || typeof packet.signature !== 'string') {
+        return { isValid: false, reason: 'MISSING_SIGNATURE' };
+      }
+      const sigClean = packet.signature.trim();
+      if (sigClean.length < 64 || !/^[0-9a-fA-F]+$/.test(sigClean) || sigClean.length % 2 !== 0) {
+        return { isValid: false, reason: 'INVALID_SIGNATURE_FORMAT' };
+      }
+
+      // 2. Resolve & Authenticate Signer Public Key
+      let pubKeyHex: string | null = options?.trustedPublicKeyHex || null;
+
+      const pairing = options?.pairingService;
+      if (pairing && packet.deviceId) {
+        const pairedPeer = pairing.getPeer(packet.deviceId);
+        if (pairedPeer) {
+          if (packet.signerPublicKey && packet.signerPublicKey.toLowerCase() !== pairedPeer.ecdsaPublicKey.toLowerCase()) {
+            return { isValid: false, reason: 'DEVICE_ID_MISMATCH' };
+          }
+          if (options?.requirePairedPeer && pairedPeer.trustStatus !== 'VERIFIED') {
+            return { isValid: false, reason: 'UNTRUSTED_PEER' };
+          }
+          pubKeyHex = pairedPeer.ecdsaPublicKey;
+        } else if (options?.requirePairedPeer) {
+          return { isValid: false, reason: 'UNKNOWN_PEER' };
+        }
+      }
+
+      if (!pubKeyHex && this.#identityKeyPair) {
+        const localId = await this.getDeviceId();
+        if (packet.deviceId === localId) {
+          const localPub = await this.getPublicIdentity();
+          if (packet.signerPublicKey && packet.signerPublicKey.toLowerCase() !== localPub.publicKeyHex.toLowerCase()) {
+            return { isValid: false, reason: 'DEVICE_ID_MISMATCH' };
+          }
+          pubKeyHex = localPub.publicKeyHex;
+        }
+      }
+
+      if (!pubKeyHex) {
+        if (!packet.signerPublicKey || typeof packet.signerPublicKey !== 'string') {
+          return { isValid: false, reason: 'MISSING_PUBLIC_KEY' };
+        }
+        const keyClean = packet.signerPublicKey.trim();
+        if (keyClean.length < 64 || !/^[0-9a-fA-F]+$/.test(keyClean) || keyClean.length % 2 !== 0) {
+          return { isValid: false, reason: 'INVALID_KEY_FORMAT' };
+        }
+        pubKeyHex = keyClean;
+      }
+
+      // 3. Cryptographic binding check: deviceId MUST match SHA-256 of public key
+      if (packet.deviceId && /^DEV-[0-9A-F]{6}$/i.test(packet.deviceId)) {
+        const expectedDevId = await CryptoService.deriveDeviceIdFromPublicKey(pubKeyHex);
+        if (expectedDevId.toUpperCase() !== packet.deviceId.toUpperCase()) {
+          return { isValid: false, reason: 'DEVICE_ID_MISMATCH' };
+        }
+      }
+
+      // 4. Import public key
+      const crypto = getWebCrypto();
+      const keyBytes = new Uint8Array(pubKeyHex.match(/.{1,2}/g)!.map(b => parseInt(b, 16)));
+      let cryptoKey: CryptoKey;
+      try {
+        cryptoKey = await crypto.subtle.importKey(
+          'spki',
+          keyBytes.buffer as ArrayBuffer,
+          { name: 'ECDSA', namedCurve: 'P-256' },
+          false,
+          ['verify']
+        );
+      } catch {
+        return { isValid: false, reason: 'INVALID_KEY_FORMAT' };
+      }
+
+      // 5. Verify cryptographic signature over canonical AAD
+      const aad = buildSosAad({
+        id: packet.id,
+        senderId: packet.senderId,
+        deviceId: packet.deviceId,
+        createdAt: packet.createdAt,
+        latitude: packet.latitude,
+        longitude: packet.longitude,
+        priority: packet.priority,
+        message: packet.message,
+        encryptedPayload: packet.encryptedPayload,
+        iv: packet.iv,
+        recipientId: packet.recipientId
+      });
+
+      const sigBytes = new Uint8Array(sigClean.match(/.{1,2}/g)!.map(b => parseInt(b, 16)));
+      // Exact-length copy for the same BufferSource reason as signSosPacket.
+      const aadBytes = new Uint8Array(aad);
+      const verified = await crypto.subtle.verify(
+        { name: 'ECDSA', hash: { name: 'SHA-256' } },
+        cryptoKey,
+        sigBytes.buffer as ArrayBuffer,
+        aadBytes.buffer as ArrayBuffer
+      );
+
+      if (!verified) {
+        return { isValid: false, reason: 'SIGNATURE_MISMATCH' };
+      }
+
+      return { isValid: true, reason: 'VALID' };
+    } catch {
+      return { isValid: false, reason: 'CRYPTO_ERROR' };
+    }
   }
 
   /* ====================================================================

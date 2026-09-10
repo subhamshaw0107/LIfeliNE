@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { HardwareStatusStrip } from '../common/HardwareStatusStrip';
-import { Radio, Smartphone, ArrowLeft, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { Radio, ArrowLeft, RefreshCw } from 'lucide-react';
 
 interface Props {
   onBack?: () => void;
 }
 
 export const MeshRadar: React.FC<Props> = ({ onBack }) => {
-  const { meshNodes, meshStatus, user, toggleSimulateNodeRange, realPeerIds, t } = useApp();
+  const { meshNodes, meshStatus, user, toggleSimulateNodeRange, realPeerIds, isNative, t } = useApp();
   const [isNodeInRange, setIsNodeInRange] = useState(true);
 
   const isBleMode = realPeerIds.length > 0;
@@ -80,7 +80,10 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
     }
   ];
 
-  const activeHops = isBleMode ? realHops : demoHops;
+  // Truthful runtime peer list:
+  // In native Android runtime, ONLY show real BLE peers.
+  // In browser/demo mode, show the multi-hop demonstration chain.
+  const activeHops = isNative ? realHops : (isBleMode ? realHops : demoHops);
 
   return (
     <div style={{ padding: '16px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -131,7 +134,7 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Radio size={20} color="#16A34A" />
             <span style={{ fontSize: 15, fontWeight: 800, color: '#0F172A' }}>
-              {t('connectedPeers')}: {activeHops.length - 1} Nodes
+              {t('connectedPeers')}: {Math.max(0, activeHops.length - 1)} Nodes
             </span>
           </div>
           <span style={{ fontSize: 12, fontWeight: 700, color: '#16A34A', background: '#F0FDF4', padding: '3px 8px', borderRadius: 8 }}>
@@ -142,7 +145,7 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
           {t('radarSubtitle')} (Bluetooth Low Energy Store-Carry-Forward)
         </p>
 
-        {!isBleMode && (
+        {!isNative && !isBleMode && (
           <button
             onClick={handleToggleRange}
             style={{
@@ -154,12 +157,157 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
               fontSize: 12,
               fontWeight: 700,
               color: '#0F172A',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6
             }}
           >
-            Simulate Peer Range: {isNodeInRange ? 'Person C in range' : 'Person C out of range'}
+            <RefreshCw size={13} />
+            <span>Simulate Peer Range: {isNodeInRange ? 'Person C in range' : 'Person C out of range'}</span>
           </button>
         )}
+      </div>
+
+      {/* In Native Mode with 0 real peers: informative notice */}
+      {isNative && realPeerIds.length === 0 && (
+        <div style={{
+          background: '#FFFBEB',
+          border: '1px solid #FDE68A',
+          borderRadius: 12,
+          padding: '12px',
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: '#D97706' }}>
+            📡 NO PEERS CURRENTLY IN RANGE
+          </div>
+          <div style={{ fontSize: 11, color: '#92400E', marginTop: 3 }}>
+            Scanning for nearby LIFELINE BLE devices. Packets will be stored and carried until a peer connects.
+          </div>
+        </div>
+      )}
+
+      {/* Interactive Clean Radar Visualizer */}
+      <div style={{
+        background: '#FFFFFF',
+        border: '1px solid #E2E8F0',
+        borderRadius: 16,
+        padding: '16px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        position: 'relative',
+        minHeight: 210,
+        boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
+        overflow: 'hidden'
+      }}>
+        {/* Radar concentric rings */}
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: 170,
+          height: 170,
+          borderRadius: '50%',
+          border: '1.5px dashed #CBD5E1',
+          pointerEvents: 'none'
+        }} />
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: 100,
+          height: 100,
+          borderRadius: '50%',
+          border: '1.5px solid #E2E8F0',
+          pointerEvents: 'none'
+        }} />
+
+        {/* Center Node (YOU) */}
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          background: '#DC2626',
+          color: '#FFF',
+          padding: '5px 10px',
+          borderRadius: 14,
+          fontSize: 11,
+          fontWeight: 800,
+          boxShadow: '0 2px 8px rgba(220, 38, 38, 0.3)',
+          zIndex: 3
+        }}>
+          {isBleMode || isNative ? 'YOU' : 'YOU (SOURCE)'}
+        </div>
+
+        {/* Floating Relay Nodes */}
+        {(isNative || isBleMode)
+          ? realPeerIds.map((peerId, idx) => {
+              const angle = (idx / realPeerIds.length) * 2 * Math.PI - Math.PI / 2;
+              const radius = 68;
+              const x = Math.cos(angle) * radius;
+              const y = Math.sin(angle) * radius;
+              const label = peerId.length > 10 ? `${peerId.slice(0, 8)}…` : peerId;
+              return (
+                <div
+                  key={peerId}
+                  style={{
+                    position: 'absolute',
+                    top: `calc(50% + ${y}px)`,
+                    left: `calc(50% + ${x}px)`,
+                    transform: 'translate(-50%, -50%)',
+                    background: '#16A34A',
+                    color: '#FFF',
+                    padding: '3px 8px',
+                    borderRadius: 10,
+                    fontSize: 10,
+                    fontWeight: 800,
+                    boxShadow: '0 2px 6px rgba(22, 163, 74, 0.3)',
+                    zIndex: 2,
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {label}
+                </div>
+              );
+            })
+          : meshNodes.map((n, idx) => {
+              const angle = (idx / meshNodes.length) * 2 * Math.PI - Math.PI / 2;
+              const radius = n.isConnected ? 58 : 82;
+              const x = Math.cos(angle) * radius;
+              const y = Math.sin(angle) * radius;
+
+              return (
+                <div
+                  key={n.id}
+                  style={{
+                    position: 'absolute',
+                    top: `calc(50% + ${y}px)`,
+                    left: `calc(50% + ${x}px)`,
+                    transform: 'translate(-50%, -50%)',
+                    background: n.isConnected ? '#16A34A' : '#DC2626',
+                    color: '#FFF',
+                    padding: '3px 8px',
+                    borderRadius: 10,
+                    fontSize: 10,
+                    fontWeight: 800,
+                    boxShadow: n.isConnected ? '0 2px 6px rgba(22, 163, 74, 0.25)' : 'none',
+                    zIndex: 2,
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {n.type === 'RESCUE_GATEWAY' ? '🚨 RESCUE HQ' : n.name.split(' ')[0]} ({n.distanceToVictimKm}km)
+                </div>
+              );
+            })}
+
+        <div style={{ marginTop: 'auto', paddingTop: 160, fontSize: 11, color: '#64748B', textAlign: 'center' }}>
+          {isBleMode || isNative ? 'Live BLE direct radio peers' : 'Direct connection range: ~1.0 km'}
+        </div>
       </div>
 
       {/* Node Chain List */}
@@ -185,15 +333,16 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div
                 style={{
-                  width: 38,
-                  height: 38,
+                  width: 36,
+                  height: 36,
                   borderRadius: 10,
                   background: hop.status === 'SOURCE' ? '#EFF6FF' : hop.inRange ? '#F0FDF4' : '#FEF2F2',
                   color: hop.status === 'SOURCE' ? '#2563EB' : hop.inRange ? '#16A34A' : '#DC2626',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontWeight: 800
+                  fontWeight: 800,
+                  fontSize: 13
                 }}
               >
                 {idx + 1}

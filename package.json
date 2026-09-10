@@ -6,15 +6,21 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:github": "cross-env DEPLOY_TARGET=github tsc && cross-env DEPLOY_TARGET=github vite build",
+    "build:vercel": "cross-env DEPLOY_TARGET=vercel tsc && cross-env DEPLOY_TARGET=vercel vite build",
     "preview": "vite preview",
     "test": "npx tsx tests/m3/packetEngine.test.ts",
     "test:ble": "npx tsx tests/ble/bleMeshTransport.test.ts",
+    "test:cloud": "npx tsx tests/cloud/cloudSync.test.ts",
+    "test:security": "npx tsx tests/security/crypto.test.ts",
+    "test:all": "npx tsx tests/m3/packetEngine.test.ts && npx tsx tests/ble/bleMeshTransport.test.ts && npx tsx tests/security/crypto.test.ts",
     "cap:sync": "cap sync android"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.1",
     "@capacitor/cli": "^8.5.1",
     "@capacitor/core": "^8.5.1",
+    "@supabase/supabase-js": "^2.116.0",
     "canvas-confetti": "^1.9.4",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.16.0",
@@ -28,6 +34,7 @@
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
+    "cross-env": "^7.0.3",
     "typescript": "^5.7.3",
     "vite": "^6.1.0"
   }

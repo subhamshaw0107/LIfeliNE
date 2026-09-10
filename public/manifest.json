@@ -2,7 +2,8 @@
   "short_name": "Lifeline",
   "name": "LIFELINE - Offline Disaster Rescue Network",
   "description": "Offline mesh disaster emergency rescue communication network when mobile networks and cell towers are down.",
-  "start_url": "/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
   "theme_color": "#0B0F19",
@@ -15,5 +16,9 @@
       "purpose": "any maskable"
     }
   ],
-  "categories": ["utilities", "medical", "social"]
+  "categories": [
+    "utilities",
+    "medical",
+    "social"
+  ]
 }

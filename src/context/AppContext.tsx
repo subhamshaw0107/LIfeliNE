@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { sendWhatsAppSosAlert } from '../services/whatsappService';
 import {
   UserRole,
   MeshStatus,
@@ -15,6 +16,7 @@ import { cryptoService } from '../services/cryptoService';
 import { geoService, calculatePriorityFromRisk, DEFAULT_DISASTER_ZONES, RESCUE_HEADQUARTERS } from '../services/geoService';
 import { rateLimiter } from '../services/rateLimiter';
 import { storageService } from '../services/storageService';
+import { syncNow } from '../services/cloudSyncService';
 import { meshEngine, DEMO_MESH_NODES } from '../services/meshEngine';
 import { audioService } from '../services/audioService';
 import { demoMeshNetwork } from '../services/demoMeshNetwork';
@@ -47,6 +49,9 @@ interface AppContextType {
   // Runtime platform: true on native Android (Capacitor), false on web.
   // Native mode auto-activates BleMeshTransport via demoMeshNetwork.
   isNative: boolean;
+  // Truthful GPS telemetry flag: true only when real GPS coordinates have been acquired.
+  // false when fallback/demo coordinates are in effect.
+  isGpsReal: boolean;
   rateLimitState: RateLimitState;
   sosList: SosPacket[];
   victimActiveSos: SosPacket | null;
@@ -221,15 +226,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return langDict[key] || translations['en'][key] || key;
   }, [language]);
 
-  // Current user / role - defaults to PERSON-A
-  const [user, setUser] = useState<UserAccount | null>({
-    userId: 'PERSON-A',
-    name: 'PERSON-A',
-    phoneId: cryptoService.getOrCreateDeviceId(),
-    role: 'VICTIM',
-    emergencyContact: '+91 98765 43210'
+  // Session-based user authentication:
+  // Fresh app launch requires login every time (per requirement).
+  // sessionStorage is scoped strictly to the current app/tab lifetime, so closing
+  // the app requires login again, while navigating between screens stays authenticated.
+  const [user, setUser] = useState<UserAccount | null>(() => {
+    try {
+      // Clear legacy localStorage auto-login key
+      localStorage.removeItem('lifeline_authenticated_user');
+      const session = sessionStorage.getItem('lifeline_session_user');
+      if (session) return JSON.parse(session);
+    } catch (e) {
+      console.error(e);
+    }
+    return null;
   });
-  const [role, setRole] = useState<UserRole>('VICTIM');
+  const [role, setRole] = useState<UserRole>(() => {
+    try {
+      const session = sessionStorage.getItem('lifeline_session_user');
+      if (session) {
+        const parsed = JSON.parse(session);
+        if (parsed.role) return parsed.role;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return 'VICTIM';
+  });
 
   // Local identity: REAL BLE mode uses the native persisted stable UUID
   // (SharedPreferences via BleMeshTransport — same ID across disconnects
@@ -252,6 +275,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     accuracy: 8,
     lastUpdated: Date.now()
   });
+  // Truthful GPS telemetry flag: false until real physical GPS fix is acquired
+  const [isGpsReal, setIsGpsReal] = useState<boolean>(false);
 
   // Disaster zones
   const [disasterZones] = useState<DisasterZone[]>(DEFAULT_DISASTER_ZONES);
@@ -382,10 +407,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const login = (account: UserAccount) => {
     setUser(account);
     setRole(account.role);
+    try {
+      sessionStorage.setItem('lifeline_session_user', JSON.stringify(account));
+      localStorage.removeItem('lifeline_authenticated_user');
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const logout = () => {
     setUser(null);
+    try {
+      sessionStorage.removeItem('lifeline_session_user');
+      localStorage.removeItem('lifeline_authenticated_user');
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const updateLocation = (coords: Partial<LocationCoords>) => {
@@ -397,17 +434,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   // REAL GPS (native Android only): acquire the physical device position
-  // once at startup so SOS packets carry real coordinates. Web/demo keeps
-  // the deterministic simulator default. Silent fallback keeps the default
-  // fix when permission is denied or GPS is unavailable.
+  // once at startup so SOS packets carry real coordinates.
+  // If permission is denied or location is unavailable, isGpsReal remains false
+  // and the UI explicitly indicates the location status instead of masquerading.
   useEffect(() => {
-    if (!isNative) return;
     let cancelled = false;
-    geoService.getCurrentLocation().then(
+    geoService.getCurrentLocation({ requireRealGps: isNative }).then(
       coords => {
-        if (!cancelled) updateLocation(coords);
+        if (!cancelled) {
+          updateLocation(coords);
+          setIsGpsReal(true);
+          console.log(`[GPS] Physical fix acquired: ${coords.latitude}, ${coords.longitude} (±${coords.accuracy}m)`);
+        }
       },
-      () => {}
+      err => {
+        if (!cancelled) {
+          setIsGpsReal(false);
+          console.warn('[GPS] Native location provider unavailable or permission denied:', err);
+        }
+      }
     );
     return () => {
       cancelled = true;
@@ -549,10 +594,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       ]
     };
 
+    // 6b. Cryptographically sign SOS packet with device's ECDSA P-256 identity key
+    const signed = await cryptoService.signSosPacket(newPacket);
+    newPacket.signature = signed.signature;
+    newPacket.signerPublicKey = signed.publicKeyHex;
+
     // Save locally
     storageService.saveSosPacket(newPacket);
     setVictimActiveSos(newPacket);
     setSosList(prev => [newPacket, ...prev.filter(p => p.id !== newPacket.id)]);
+
+    console.log(`[PACKET] SOS created: ${newPacket.id}, Priority: ${newPacket.priority}, Sender: ${senderId}, Device: ${deviceId}, GPS: ${newPacket.latitude}, ${newPacket.longitude}`);
 
     // IF PERSON FROM RED AREA GIVES SOS -> TRIGGER POPUP!
     if (riskEval.riskLevel === 'CRITICAL') {
@@ -564,6 +616,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Per-hop progress, HQ delivery and reverse ACKs arrive via the
     // demoMeshNetwork.onProgress subscription above.
     void demoMeshNetwork.sendSos(newPacket);
+
+    // 8. Fire WhatsApp emergency alert (non-blocking — does not affect SOS flow)
+    sendWhatsAppSosAlert({
+      sosId: newPacket.id,
+      senderId: newPacket.senderId,
+      latitude: newPacket.latitude,
+      longitude: newPacket.longitude,
+      priority: newPacket.priority,
+      message: newPacket.message,
+      timestamp: newPacket.timestamp,
+    }).then(waResult => {
+      if (waResult.success) {
+        console.log(`[WhatsApp] Emergency alert dispatched: ${newPacket.id}`);
+      } else {
+        console.warn(`[WhatsApp] Alert delivery notice: ${waResult.error}`);
+      }
+    });
 
     return newPacket;
   };
@@ -641,13 +710,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  // Cloud sync when internet returns
+  // Cloud sync (manual trigger): delegates to CloudSyncService, which
+  // uploads queued SOS IDs and removes ONLY server-confirmed ones.
+  // Fully asynchronous: emergency PacketEngine/BLE traffic never waits
+  // on it, and offline operation is unaffected.
   const syncWithCloud = async () => {
     setSyncPending(true);
-    await new Promise(r => setTimeout(r, 1200));
-    storageService.clearSyncQueue();
-    setSyncPending(false);
-    audioService.playAcknowledgeChime();
+    try {
+      await syncNow();
+    } catch {
+      // syncNow never throws by contract; belt-and-braces only
+    } finally {
+      setSyncPending(false);
+      audioService.playAcknowledgeChime();
+    }
   };
 
   // Demo Mode Runner
@@ -746,6 +822,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         meshNodes,
         realPeerIds,
         isNative,
+        isGpsReal,
         rateLimitState,
         sosList,
         victimActiveSos,

@@ -54,3 +54,4 @@ export const HardwareStatusStrip: React.FC = () => {
     </div>
   );
 };
+

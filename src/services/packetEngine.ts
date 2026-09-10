@@ -11,7 +11,8 @@ import {
   MeshPacket,
   isAuthenticatedMeshAck,
   toMeshAuthenticatedAck,
-  fromMeshAuthenticatedAck
+  fromMeshAuthenticatedAck,
+  isSosPacketSigned
 } from '../models/Packet';
 import { sosRepository, SosRepository } from '../repositories/sosRepository';
 import { deduplicationService, DeduplicationService } from './deduplicationService';
@@ -20,6 +21,7 @@ import { geoTriageService, GeoTriageService } from './geoTriageService';
 import { MeshTransport } from '../transport/meshTransport';
 import {
   CryptoService,
+  cryptoService,
   PairingService,
   ReplayProtectionService,
   replayProtectionService,
@@ -36,7 +38,8 @@ export type PacketEngineEventType =
   | 'LOOP_PREVENTED'
   | 'TTL_EXPIRED'
   | 'TRIAGE_ESCALATED'
-  | 'WAITING_RELAY';
+  | 'WAITING_RELAY'
+  | 'SECURITY_DROPPED';
 
 export interface PacketEngineEvent {
   type: PacketEngineEventType;
@@ -45,6 +48,12 @@ export interface PacketEngineEvent {
   message: string;
   timestamp: number;
 }
+
+/**
+ * SOS cryptographic authentication hook. Runs BEFORE any dedup bookkeeping,
+ * storage, geo-triage, or Store-Carry-Forward queueing.
+ */
+export type SosVerifier = (packet: SosPacket) => boolean | Promise<boolean>;
 
 /**
  * ACK authentication hook. Runs BEFORE any dedup bookkeeping, so a failed
@@ -80,6 +89,18 @@ export class PacketEngine {
   private currentNetworkStatus: SimpleNetworkStatus = 'CONNECTED';
   private pendingAcks: AckPacket[] = [];
   private ackVerifier: AckVerifier = ack => isStructurallyAuthenticatedAck(ack);
+  private requireSosSignature: boolean = false;
+  private sosVerifier: SosVerifier = async (packet: SosPacket) => {
+    const cryptoInstance = this.crypto || cryptoService;
+    if (packet.signature) {
+      const res = await cryptoInstance.verifySosPacketSignature(packet, {
+        pairingService: this.pairing
+      });
+      return res.isValid;
+    }
+    // If packet has no signature, allow only if strict signatures are not required
+    return !this.requireSosSignature;
+  };
   private crypto?: CryptoService;
   private pairing?: PairingService;
   private replayProtection: ReplayProtectionService = replayProtectionService;
@@ -108,9 +129,7 @@ export class PacketEngine {
     this.triage = options?.triage || geoTriageService;
     this.crypto = options?.crypto;
     this.pairing = options?.pairing;
-    if (options?.replayProtection) {
-      this.replayProtection = options.replayProtection;
-    }
+    this.replayProtection = options?.replayProtection || new ReplayProtectionService(this.localNodeId);
     if (options?.transport) {
       this.setTransport(options.transport);
     }
@@ -169,6 +188,20 @@ export class PacketEngine {
    */
   setAckVerifier(verifier: AckVerifier): void {
     this.ackVerifier = verifier;
+  }
+
+  /**
+   * Install an SOS cryptographic verifier (runs before deduplication & storage).
+   */
+  setSosVerifier(verifier: SosVerifier): void {
+    this.sosVerifier = verifier;
+  }
+
+  /**
+   * Enforce strict requirement for cryptographic signatures on all incoming SOS packets.
+   */
+  setRequireSosSignature(required: boolean): void {
+    this.requireSosSignature = required;
   }
 
   getNetworkStatus(): SimpleNetworkStatus {
@@ -250,6 +283,38 @@ export class PacketEngine {
   }
 
   /**
+   * High-level asynchronous entry point to create, cryptographically sign, geo-triage, and store a new authentic SOS packet.
+   */
+  async createAndSignSos(params: CreateSosPacketParams, cryptoInstance?: CryptoService): Promise<SosPacket> {
+    const triageResult = this.triage.evaluateLocation(params.latitude, params.longitude, params.priority || 'HIGH');
+    const packet = createSosPacket({
+      ...params,
+      priority: triageResult.calculatedPriority,
+      riskLevel: triageResult.riskLevel,
+      disasterZoneName: triageResult.disasterZoneName,
+      distanceFromDisasterKm: triageResult.distanceFromDisasterKm,
+      distanceFromRescueKm: triageResult.distanceFromRescueKm
+    });
+
+    const activeCrypto = cryptoInstance || this.crypto || cryptoService;
+    const signed = await activeCrypto.signSosPacket(packet);
+    packet.signature = signed.signature;
+    packet.signerPublicKey = signed.publicKeyHex;
+
+    this.replayProtection.recordProcessed(packet.id, packet.createdAt);
+    this.dedup.markSeen(packet.id);
+    this.sosRepo.savePacket(packet);
+    this.emitEvent({
+      type: 'STORE',
+      nodeId: this.localNodeId,
+      packetId: packet.id,
+      message: `SOS packet ${packet.id} created, signed, and stored locally at ${this.localNodeId}. Priority: ${packet.priority}.`,
+      timestamp: Date.now()
+    });
+    return packet;
+  }
+
+  /**
    * Main packet decision pipeline:
    * "What should happen to the packet?"
    *
@@ -282,7 +347,42 @@ export class PacketEngine {
       return false;
     }
 
-    // 2. Deduplication Check
+    // 2. P0: Cryptographic Authenticity & Integrity Verification
+    // MUST run strictly BEFORE deduplication, storage, geo-triage, and Store-Carry-Forward queueing.
+    let authenticated = false;
+    try {
+      authenticated = await this.sosVerifier(packet);
+    } catch {
+      authenticated = false;
+    }
+    if (!authenticated) {
+      this.emitEvent({
+        type: 'SECURITY_DROPPED',
+        nodeId: this.localNodeId,
+        packetId: packet.id,
+        message: `[SECURITY DROPPED] Unauthenticated or tampered SOS packet ${packet.id} rejected before dedup/storage.`,
+        timestamp: Date.now()
+      });
+      console.warn('[PacketEngine] Dropping unauthenticated/tampered SOS packet:', packet.id);
+      return false;
+    }
+
+    // 3. P0: Replay Protection & Timestamp Freshness Check
+    // MUST run strictly BEFORE deduplication, storage, geo-triage, and Store-Carry-Forward queueing.
+    const replayStatus = this.replayProtection.checkAndRecord(packet);
+    if (replayStatus !== 'ACCEPT') {
+      this.emitEvent({
+        type: 'SECURITY_DROPPED',
+        nodeId: this.localNodeId,
+        packetId: packet.id,
+        message: `[REPLAY DROPPED] SOS packet ${packet.id} rejected by replay protection: ${replayStatus}`,
+        timestamp: Date.now()
+      });
+      console.warn(`[PacketEngine] Dropping replayed/expired SOS packet ${packet.id}: ${replayStatus}`);
+      return false;
+    }
+
+    // 4. Deduplication Check (Only authenticated and fresh packets reach here)
     if (this.dedup.hasSeen(packet.id)) {
       this.emitEvent({
         type: 'DUPLICATE_BLOCKED',
