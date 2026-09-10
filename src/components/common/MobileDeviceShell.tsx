@@ -9,6 +9,7 @@ import { LoginScreen } from '../auth/LoginScreen';
 import { SplashScreen } from '../splash/SplashScreen';
 import { BluetoothWifiPermissionModal } from './BluetoothWifiPermissionModal';
 import { LanguageSelectionScreen } from './LanguageSelectionScreen';
+import { LogoutConfirmModal } from './LogoutConfirmModal';
 import { RedZoneEmergencyModal } from './RedZoneEmergencyModal';
 import {
   Home,
@@ -52,6 +53,12 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
   const [hasSelectedLanguage, setHasSelectedLanguage] = useState<boolean>(() => {
     return !!localStorage.getItem('lifeline_user_lang');
   });
+  const [showLogoutModal, setShowLogoutModal] = useState<boolean>(false);
+
+  const handleConfirmLogout = React.useCallback(() => {
+    setShowLogoutModal(false);
+    logout();
+  }, [logout]);
 
   // Time state for status bar
   const [timeStr, setTimeStr] = useState(() => {
@@ -174,6 +181,29 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
           <span style={{ fontSize: 10, fontWeight: 700, color: activeRole === 'VICTIM' ? '#10B981' : '#38BDF8' }}>
             {activeRole === 'VICTIM' ? '● SOS READY' : 'TACTICAL-HQ'}
           </span>
+          <button
+            type="button"
+            onClick={() => setShowLogoutModal(true)}
+            style={{
+              background: 'rgba(239, 68, 68, 0.15)',
+              border: '1px solid rgba(239, 68, 68, 0.35)',
+              color: '#FCA5A5',
+              borderRadius: 6,
+              padding: '2px 7px',
+              fontSize: 9,
+              fontWeight: 800,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 3,
+              marginLeft: 2,
+              letterSpacing: '0.4px'
+            }}
+            title="Logout of Lifeline"
+          >
+            <LogOut size={10} />
+            <span>LOGOUT</span>
+          </button>
         </div>
       </div>
 
@@ -314,7 +344,8 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
               </button>
 
               <button
-                onClick={logout}
+                type="button"
+                onClick={() => setShowLogoutModal(true)}
                 style={{
                   background: 'rgba(239, 68, 68, 0.15)',
                   border: '1px solid rgba(239, 68, 68, 0.3)',
@@ -331,7 +362,7 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
                 }}
               >
                 <LogOut size={15} />
-                <span>Switch Account / Logout</span>
+                <span>Logout / Switch Account</span>
               </button>
             </div>
           )
@@ -399,15 +430,15 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
             </button>
 
             <button
-              className={`nav-item-btn ${victimTab === 'MESSAGES' ? 'active' : ''}`}
-              onClick={() => setVictimTab('MESSAGES')}
+              className={`nav-item-btn ${victimTab === 'PROFILE' ? 'active' : ''}`}
+              onClick={() => setVictimTab('PROFILE')}
             >
-              <MessageSquare size={18} />
-              <span>Messages</span>
+              <Settings size={18} />
+              <span>Account</span>
             </button>
           </>
         ) : (
-          /* Rescue Team Navigation: Dashboard | Live Map | SOS | Mesh | Victims */
+          /* Rescue Team Navigation: Dashboard | Live Map | SOS | Mesh | Logout */
           <>
             <button
               className={`nav-item-btn ${rescueTab === 'DASHBOARD' ? 'active' : ''}`}
@@ -440,9 +471,24 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
               <Radio size={18} />
               <span>Mesh</span>
             </button>
+
+            <button
+              className="nav-item-btn"
+              onClick={() => setShowLogoutModal(true)}
+            >
+              <LogOut size={18} color="#EF4444" />
+              <span style={{ color: '#EF4444' }}>Logout</span>
+            </button>
           </>
         )}
       </div>
+
+      {/* Logout Confirmation Modal */}
+      <LogoutConfirmModal
+        isOpen={showLogoutModal}
+        onCancel={() => setShowLogoutModal(false)}
+        onConfirm={handleConfirmLogout}
+      />
 
       {/* Emergency Red Area SOS Alert Popup Modal */}
       {redZoneSosPopup && (

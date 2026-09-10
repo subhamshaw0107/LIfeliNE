@@ -187,11 +187,16 @@ const INITIAL_MOCK_SOS: SosPacket[] = [
 ];
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Current user / role - persisted in localStorage so logged-in users stay authenticated
+  // Session-based user authentication:
+  // Fresh app launch requires login every time (per requirement).
+  // sessionStorage is scoped strictly to the current app/tab lifetime, so closing
+  // the app requires login again, while navigating between screens stays authenticated.
   const [user, setUser] = useState<UserAccount | null>(() => {
     try {
-      const stored = localStorage.getItem('lifeline_authenticated_user');
-      if (stored) return JSON.parse(stored);
+      // Clear legacy localStorage auto-login key
+      localStorage.removeItem('lifeline_authenticated_user');
+      const session = sessionStorage.getItem('lifeline_session_user');
+      if (session) return JSON.parse(session);
     } catch (e) {
       console.error(e);
     }
@@ -199,9 +204,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   });
   const [role, setRole] = useState<UserRole>(() => {
     try {
-      const stored = localStorage.getItem('lifeline_authenticated_user');
-      if (stored) {
-        const parsed = JSON.parse(stored);
+      const session = sessionStorage.getItem('lifeline_session_user');
+      if (session) {
+        const parsed = JSON.parse(session);
         if (parsed.role) return parsed.role;
       }
     } catch (e) {
@@ -359,7 +364,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setUser(account);
     setRole(account.role);
     try {
-      localStorage.setItem('lifeline_authenticated_user', JSON.stringify(account));
+      sessionStorage.setItem('lifeline_session_user', JSON.stringify(account));
+      localStorage.removeItem('lifeline_authenticated_user');
     } catch (e) {
       console.error(e);
     }
@@ -368,6 +374,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const logout = () => {
     setUser(null);
     try {
+      sessionStorage.removeItem('lifeline_session_user');
       localStorage.removeItem('lifeline_authenticated_user');
     } catch (e) {
       console.error(e);
