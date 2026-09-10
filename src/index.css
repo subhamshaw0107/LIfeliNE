@@ -1530,6 +1530,10 @@ body {
   height: 100% !important;
 }
 
+.leaflet-map-container .leaflet-tile-pane {
+  filter: brightness(0.65) invert(1) contrast(3.2) hue-rotate(200deg) saturate(0.25) brightness(0.65);
+}
+
 .offline-map-overlay-banner {
   position: absolute;
   top: 12px;

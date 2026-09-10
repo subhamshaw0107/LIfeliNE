@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { UserAccount, UserRole } from '../../types';
 import { LanguageSelector } from '../common/LanguageSelector';
-import { isFirebaseConfigured, loginWithFirebase, formatFirebaseAuthError } from '../../services/firebase';
+import { loginWithFirebase, formatFirebaseAuthError } from '../../services/firebase';
 
 type AuthView = 'LOGIN' | 'REGISTER' | 'FORGOT_PASSWORD';
 type LoginType = 'PEOPLE' | 'OFFICIAL';
@@ -290,46 +290,6 @@ export const LoginScreen: React.FC = () => {
             {t('loginSubtitle')}
           </p>
 
-          {/* Firebase Authentication Status Indicator */}
-          <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center' }}>
-            {isFirebaseConfigured() ? (
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  fontSize: 10,
-                  fontWeight: 800,
-                  color: '#16A34A',
-                  background: 'rgba(22, 163, 74, 0.1)',
-                  border: '1px solid rgba(22, 163, 74, 0.3)',
-                  padding: '2px 8px',
-                  borderRadius: 12,
-                  letterSpacing: '0.4px'
-                }}
-              >
-                <span>🔥 Firebase Authentication Active</span>
-              </div>
-            ) : (
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  fontSize: 10,
-                  fontWeight: 800,
-                  color: '#D97706',
-                  background: 'rgba(217, 119, 6, 0.1)',
-                  border: '1px solid rgba(217, 119, 6, 0.3)',
-                  padding: '2px 8px',
-                  borderRadius: 12,
-                  letterSpacing: '0.4px'
-                }}
-              >
-                <span>⚠️ Firebase Not Configured (.env.local required)</span>
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Dual Role Tabs: People vs Official */}
