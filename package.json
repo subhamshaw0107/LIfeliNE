@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:github": "cross-env DEPLOY_TARGET=github tsc && cross-env DEPLOY_TARGET=github vite build",
+    "build:vercel": "cross-env DEPLOY_TARGET=vercel tsc && cross-env DEPLOY_TARGET=vercel vite build",
     "preview": "vite preview",
     "test": "npx tsx tests/m3/packetEngine.test.ts",
     "test:ble": "npx tsx tests/ble/bleMeshTransport.test.ts",
@@ -32,6 +34,7 @@
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
+    "cross-env": "^7.0.3",
     "typescript": "^5.7.3",
     "vite": "^6.1.0"
   }

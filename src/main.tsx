@@ -83,10 +83,13 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
 );
 
 // Register service worker for offline disaster operation & Android WebAPK install
+// Uses import.meta.env.BASE_URL so it works under any deployment subpath
+// (root / for Vercel, /LIfeliNE/ for GitHub Pages, etc.)
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {
-      // ignore
+    const swUrl = (import.meta.env.BASE_URL || '/') + 'sw.js';
+    navigator.serviceWorker.register(swUrl, { scope: import.meta.env.BASE_URL || '/' }).catch(() => {
+      // Service worker registration failed - app still works without offline caching
     });
   });
 }

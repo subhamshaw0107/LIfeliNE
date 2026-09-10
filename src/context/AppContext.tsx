@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { sendWhatsAppSosAlert } from '../services/whatsappService';
 import {
   UserRole,
   MeshStatus,
@@ -603,6 +604,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Per-hop progress, HQ delivery and reverse ACKs arrive via the
     // demoMeshNetwork.onProgress subscription above.
     void demoMeshNetwork.sendSos(newPacket);
+
+    // 8. Fire WhatsApp emergency alert (non-blocking — does not affect SOS flow)
+    sendWhatsAppSosAlert({
+      sosId: newPacket.id,
+      senderId: newPacket.senderId,
+      latitude: newPacket.latitude,
+      longitude: newPacket.longitude,
+      priority: newPacket.priority,
+      message: newPacket.message,
+      timestamp: newPacket.timestamp,
+    }).then(waResult => {
+      if (waResult.success) {
+        console.log(`[WhatsApp] Emergency alert dispatched: ${newPacket.id}`);
+      } else {
+        console.warn(`[WhatsApp] Alert delivery notice: ${waResult.error}`);
+      }
+    });
 
     return newPacket;
   };
