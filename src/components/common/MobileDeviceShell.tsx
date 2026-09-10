@@ -537,6 +537,14 @@ export const MobileDeviceShell: React.FC<Props> = ({ forcedRole, deviceTitle, tr
               </div>
               <span style={{ color: '#DC2626' }}>Logout</span>
             </button>
+
+            <button
+              className="nav-item-btn"
+              onClick={() => setShowLogoutModal(true)}
+            >
+              <LogOut size={18} color="#EF4444" />
+              <span style={{ color: '#EF4444' }}>Logout</span>
+            </button>
           </>
         )}
       </div>

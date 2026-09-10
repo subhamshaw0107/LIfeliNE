@@ -224,6 +224,7 @@ async function getDeviceBatteryLevel(): Promise<number> {
 }
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+
   // Theme state ('light' | 'dark', persisted locally, defaults to 'dark')
   const [theme, setThemeState] = useState<ThemeMode>(() => {
     try {
@@ -264,6 +265,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const langDict = translations[language] || translations['en'];
     return langDict[key] || translations['en'][key] || key;
   }, [language]);
+
 
   // Session-based user authentication:
   // Fresh app launch requires login every time (per requirement).
