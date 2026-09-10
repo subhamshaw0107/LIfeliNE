@@ -199,6 +199,8 @@ class FakeBridge implements BleNativeBridge {
   startedScan = false;
   startedAdvertising = false;
   private packetHandlers: PacketHandler[] = [];
+  private foundHandlers: Array<(payload: BleFoundEvent) => void> = [];
+  connectCalls: string[] = [];
 
   async initialize() {
     return { peerId: 'BLE-SELF-1', supported: this.supported };
@@ -227,6 +229,7 @@ class FakeBridge implements BleNativeBridge {
   }
 
   async connect(peerId: string) {
+    this.connectCalls.push(peerId);
     if (!this.peers.has(peerId)) return { ok: false };
     return { ok: true };
   }
@@ -262,7 +265,16 @@ class FakeBridge implements BleNativeBridge {
     if (event === 'packetReceived') {
       this.packetHandlers.push(callback as PacketHandler);
     }
+    if (event === 'peerFound') {
+      this.foundHandlers.push(callback as (payload: BleFoundEvent) => void);
+    }
     return { remove: () => undefined };
+  }
+
+  /** Simulate native BLE discovery of a nearby advertiser. */
+  async emitPeerFound(address: string): Promise<void> {
+    const payload: BleFoundEvent = { address, name: 'LIFELINE', rssi: -60 };
+    await Promise.all(this.foundHandlers.map(cb => Promise.resolve(cb(payload))));
   }
 
   /** Simulate the native layer delivering a COMPLETE reassembled packet. */
@@ -522,6 +534,26 @@ async function runTestSuite() {
     deniedEnv
   );
   assert(upgradedDenied === false, 'Permission denial keeps mock transport');
+
+  // Auto-connect: discovery must trigger exactly one connectGatt attempt per
+  // peer (cooldown-guarded), and discovery alone must never count as connected.
+  console.log('\n[BLE 16] Discovery triggers auto-connect (regression: silent no-link)');
+  const autoBridge = new FakeBridge();
+  autoBridge.peers.clear(); // no pre-existing links: discovery alone proves nothing
+  const autoBle = new BleMeshTransport('AUTO-PHONE', autoBridge);
+  assert(await autoBle.start(), 'Auto-connect transport starts');
+  await autoBridge.emitPeerFound('AA:BB:CC:DD:EE:FF');
+  assert(
+    autoBridge.connectCalls.length === 1 && autoBridge.connectCalls[0] === 'AA:BB:CC:DD:EE:FF',
+    'First discovery triggers one connect attempt to the discovered address'
+  );
+  await autoBridge.emitPeerFound('AA:BB:CC:DD:EE:FF');
+  assert(autoBridge.connectCalls.length === 1, 'Repeat sighting within cooldown does not reconnect');
+  assert(
+    (await autoBle.getConnectedPeers()).length === 0,
+    'Discovered-but-unconnected peer is not reported as connected'
+  );
+  await autoBle.dispose();
 
   await ble.dispose();
 
