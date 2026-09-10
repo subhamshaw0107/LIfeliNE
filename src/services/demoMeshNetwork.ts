@@ -274,6 +274,11 @@ class DemoMeshNetwork {
       },
       env
     );
+    // Truthful transport diagnostic: reflects the ACTUAL runtime instance,
+    // never the desired one. Mock path keeps existing demo behavior.
+    console.log(
+      `[BLE-DIAG] transport = ${this.selfTransport instanceof BleMeshTransport ? 'REAL_BLE' : 'MOCK'}`
+    );
     return upgraded;
   }
 

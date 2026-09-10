@@ -45,10 +45,10 @@ export type BlePacketEvent = { peerId: string; data: string };
 export type BlePeerEvent = { peerId: string };
 export type BleFoundEvent = { address: string; name: string; rssi: number };
 
-/** Peer-set change notification (snapshot array, never the live Set). */
+  /** Peer-set change notification (snapshot array, never the live Set). */
 export type PeersChangedCallback = (peerIds: string[]) => void;
 
-/** Snapshot of live radio state for the dev diagnostics panel. No secrets. */
+/** Snapshot of live radio state for diagnostics. No secrets, no packet bytes. */
 export interface BleDiagnostics {
   initialized: boolean;
   permissionsGranted: boolean | null;
@@ -126,6 +126,11 @@ export class BleMeshTransport implements MeshTransport {
   private diagLastConnection = 'never connected';
   private diagLastRx: { peerId: string; bytes: number; at: number } | null = null;
   private diagLastTx: { peerId: string; bytes: number; ok: boolean; at: number } | null = null;
+  // Last auto-connect attempt per discovered address (ms epoch). Prevents
+  // hot-looping connectGatt on repeated scan hits; stale entries re-arm.
+  private lastConnectAttempt = new Map<string, number>();
+  private static readonly CONNECT_COOLDOWN_MS = 15000;
+  private static readonly MAX_TRACKED_ADDRESSES = 200;
 
   constructor(nodeIdHint: string, bridge: BleNativeBridge) {
     this.nodeId = nodeIdHint;
@@ -174,6 +179,7 @@ export class BleMeshTransport implements MeshTransport {
       this.started = true;
       // DIAG-LOG: temporary physical-test aid (remove after field verification).
       console.log(`[BLE-DIAG] radio started, nodeId=${this.nodeId}`);
+      console.log('[BLE-DIAG] transport = REAL_BLE');
       return true;
     } catch {
       return false;
@@ -194,6 +200,8 @@ export class BleMeshTransport implements MeshTransport {
     this.diagScanning = false;
     this.diagAdvertising = false;
     this.started = false;
+    this.diagScanning = false;
+    this.diagAdvertising = false;
   }
 
   /** Read-only radio snapshot for diagnostics. No secrets, no packet bytes. */
@@ -301,18 +309,11 @@ export class BleMeshTransport implements MeshTransport {
         this.handlePeerDisconnected(payload);
       });
       this.bridgeHandles.push(disconnectedHandle);
-      // Discovery only: a found peer is NOT connected — tracked for
-      // diagnostics, never added to the connected set.
+      // Discovery drives auto-connect: a found LIFELINE peer gets one
+      // connectGatt attempt (cooldown-guarded). Found alone never counts
+      // as connected — only peerConnected promotes to the connected set.
       const foundHandle = await this.bridge.addListener('peerFound', payload => {
-        if (payload && typeof payload.address === 'string') {
-          this.diagDiscovered.set(payload.address, {
-            name: typeof payload.name === 'string' ? payload.name : '',
-            rssi: typeof payload.rssi === 'number' ? payload.rssi : 0,
-            at: Date.now(),
-          });
-          this.diagLastPeerFound = payload.address;
-          console.log(`[BLE-DIAG] peer found: ${payload.address}`);
-        }
+        this.handlePeerFound(payload);
       });
       this.bridgeHandles.push(foundHandle);
     } catch {
@@ -355,6 +356,48 @@ export class BleMeshTransport implements MeshTransport {
     this.notifyPeerListeners();
   }
 
+  /**
+   * Auto-connect on discovery: the missing link that left two advertising
+   * phones permanently unlinked (scan + advertise ran, but nobody ever
+   * called connectGatt). Only while the radio is up; cooldown-guarded per
+   * address so repeated scan hits don't hot-loop; the native side dedups
+   * already-connected addresses. Discovery alone still never counts as
+   * connected — only peerConnected promotes to the connected set.
+   */
+  private handlePeerFound(payload: { address?: string; name?: string; rssi?: number } | null): void {
+    if (payload == null || typeof payload.address !== 'string' || payload.address.length === 0) {
+      return;
+    }
+    const address = payload.address;
+    this.diagDiscovered.set(address, {
+      name: typeof payload.name === 'string' ? payload.name : '',
+      rssi: typeof payload.rssi === 'number' ? payload.rssi : 0,
+      at: Date.now(),
+    });
+    if (this.diagDiscovered.size > BleMeshTransport.MAX_TRACKED_ADDRESSES) {
+      const oldest = [...this.diagDiscovered.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+      if (oldest) this.diagDiscovered.delete(oldest[0]);
+    }
+    this.diagLastPeerFound = address;
+    console.log(`[BLE-DIAG] peer found: ${address}`);
+    if (!this.started) return;
+    const now = Date.now();
+    const last = this.lastConnectAttempt.get(address) ?? 0;
+    if (now - last < BleMeshTransport.CONNECT_COOLDOWN_MS) return;
+    this.lastConnectAttempt.set(address, now);
+    console.log(`[BLE-DIAG] connecting: ${address}`);
+    try {
+      const result = this.bridge.connect(address);
+      if (result != null && typeof (result as Promise<unknown>).then === 'function') {
+        (result as Promise<unknown>).catch(() => {
+          // Next scan sighting (after cooldown) retries.
+        });
+      }
+    } catch {
+      // Next scan sighting (after cooldown) retries.
+    }
+  }
+
   private notifyPeerListeners(): void {
     const snapshot = [...this.connectedPeers];
     for (const listener of [...this.peerListeners]) {
@@ -383,6 +426,7 @@ export class BleMeshTransport implements MeshTransport {
     if (bytes.length === 0) return;
     const sender = payload.peerId;
     this.diagLastRx = { peerId: sender, bytes: bytes.length, at: Date.now() };
+    console.log(`[BLE-DIAG] JS packetReceived: from=${sender} bytes=${bytes.length}`);
     // DIAG-LOG: temporary physical-test aid (remove after field verification).
     console.log(`[BLE-DIAG] packet from ${sender}, ${bytes.length} bytes -> M3`);
     const snapshot = [...this.listeners];
