@@ -82,12 +82,12 @@ export const RescueDashboard: React.FC<Props> = ({
 
       {/* Active Triage List */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
-        <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0F172A' }}>
+        <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-main)' }}>
           Active Emergency Triage Queue ({sosList.length})
         </h3>
 
         {sosList.length === 0 ? (
-          <div style={{ padding: 24, textAlign: 'center', color: '#64748B', background: '#FFFFFF', borderRadius: 16, border: '1px solid #E2E8F0' }}>
+          <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-sub)', background: 'var(--bg-card)', borderRadius: 16, border: '1px solid var(--border-card)' }}>
             {t('noAlerts')}
           </div>
         ) : (
@@ -107,27 +107,27 @@ export const RescueDashboard: React.FC<Props> = ({
                     >
                       {sos.priority}
                     </span>
-                    <span style={{ fontSize: 14, fontFamily: 'monospace', fontWeight: 800, color: '#2563EB' }}>
+                    <span style={{ fontSize: 14, fontFamily: 'monospace', fontWeight: 800, color: '#38BDF8' }}>
                       {sos.id}
                     </span>
                   </div>
 
-                  <span style={{ fontSize: 12, fontWeight: 700, color: isRescued ? '#16A34A' : '#D97706' }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: isRescued ? '#16A34A' : '#F59E0B' }}>
                     {sos.status}
                   </span>
                 </div>
 
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-main)' }}>
                   Sender: {sos.senderId || sos.userId}
                 </div>
 
-                <div style={{ fontSize: 13, color: '#334155', background: '#F8FAFC', padding: '8px 12px', borderRadius: 10, border: '1px solid #E2E8F0' }}>
+                <div style={{ fontSize: 13, color: 'var(--text-main)', background: 'var(--bg-card-subtle)', padding: '8px 12px', borderRadius: 10, border: '1px solid var(--border-card)' }}>
                   "{sos.message || 'I need help.'}"
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: '#64748B' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-sub)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <MapPin size={14} color="#DC2626" />
+                    <MapPin size={14} color="#EF4444" />
                     <span>Dist: <strong>{sos.distanceFromDisasterKm} km</strong></span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -152,7 +152,7 @@ export const RescueDashboard: React.FC<Props> = ({
                     <button
                       className="triage-btn secondary"
                       onClick={() => markRescuedSos(sos.id)}
-                      style={{ color: '#16A34A' }}
+                      style={{ color: 'var(--color-safe)' }}
                     >
                       <CheckCircle2 size={15} />
                       <span>{t('markRescuedBtn')}</span>
@@ -162,15 +162,19 @@ export const RescueDashboard: React.FC<Props> = ({
                   <button
                     className="triage-btn secondary"
                     onClick={() => setInspectingPacket(sos)}
+                    title="Inspect Packet Telemetry"
+                    aria-label="Inspect Packet Telemetry"
                   >
-                    <Eye size={15} />
+                    <Eye size={16} />
                   </button>
 
                   <button
                     className="triage-btn secondary"
                     onClick={onNavigateToMap}
+                    title="View on Map"
+                    aria-label="View on Map"
                   >
-                    <MapPin size={15} />
+                    <MapPin size={16} />
                   </button>
                 </div>
               </div>

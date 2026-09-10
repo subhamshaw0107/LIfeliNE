@@ -23,14 +23,14 @@ export const LanguageSelector: React.FC<Props> = ({ className = '', compact = fa
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        background: '#FFFFFF',
-        border: '1px solid #CBD5E1',
+        background: 'var(--bg-card-subtle)',
+        border: '1px solid var(--border-card)',
         borderRadius: 24,
         padding: '3px 4px',
         boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
       }}
     >
-      <div style={{ padding: '0 6px', display: 'flex', alignItems: 'center', color: '#64748B' }}>
+      <div style={{ padding: '0 6px', display: 'flex', alignItems: 'center', color: 'var(--text-sub)' }}>
         <Globe size={15} />
       </div>
       {options.map((opt) => {
@@ -41,7 +41,7 @@ export const LanguageSelector: React.FC<Props> = ({ className = '', compact = fa
             onClick={() => setLanguage(opt.code)}
             style={{
               background: isActive ? '#2563EB' : 'transparent',
-              color: isActive ? '#FFFFFF' : '#334155',
+              color: isActive ? '#FFFFFF' : 'var(--text-sub)',
               border: 'none',
               borderRadius: 20,
               padding: compact ? '4px 10px' : '5px 12px',

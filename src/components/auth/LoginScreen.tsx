@@ -13,10 +13,12 @@ import {
   ShieldAlert,
   AlertTriangle,
   BadgeCheck,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 import { UserAccount, UserRole } from '../../types';
 import { LanguageSelector } from '../common/LanguageSelector';
+import { isFirebaseConfigured, loginWithFirebase } from '../../services/firebase';
 
 type AuthView = 'LOGIN' | 'REGISTER' | 'FORGOT_PASSWORD';
 type LoginType = 'PEOPLE' | 'OFFICIAL';
@@ -55,6 +57,7 @@ export const LoginScreen: React.FC = () => {
 
   // Shared status
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   // Email format validator
   const isValidEmail = (email: string) => {
@@ -62,7 +65,7 @@ export const LoginScreen: React.FC = () => {
   };
 
   // ===================== PEOPLE LOGIN HANDLER =====================
-  const handlePeopleLogin = (e: React.FormEvent) => {
+  const handlePeopleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -78,22 +81,42 @@ export const LoginScreen: React.FC = () => {
       return;
     }
 
-    // Security check: People users ALWAYS authenticate with VICTIM role.
-    const userRole: UserRole = 'VICTIM';
+    setIsLoading(true);
 
-    const account: UserAccount = {
-      userId: cleanEmail,
-      name: cleanEmail.includes('@') ? cleanEmail.split('@')[0] : cleanEmail,
-      phoneId: cryptoService.getOrCreateDeviceId(),
-      role: userRole,
-      emergencyContact: '+91 98765 43210'
-    };
-
-    login(account);
+    try {
+      if (isFirebaseConfigured()) {
+        const account = await loginWithFirebase(cleanEmail, peoplePassword);
+        login(account);
+      } else {
+        // Fallback offline simulation when Firebase credentials are not yet entered in .env.local
+        const userRole: UserRole = 'VICTIM';
+        const account: UserAccount = {
+          userId: cleanEmail,
+          name: cleanEmail.includes('@') ? cleanEmail.split('@')[0] : cleanEmail,
+          phoneId: cryptoService.getOrCreateDeviceId(),
+          role: userRole,
+          emergencyContact: '+91 98765 43210'
+        };
+        login(account);
+      }
+    } catch (err: any) {
+      console.error('[LIFELINE Login Error]', err);
+      let msg = err?.message || 'Login failed. Please verify credentials.';
+      if (err?.code === 'auth/invalid-credential' || err?.code === 'auth/wrong-password') {
+        msg = 'Invalid email or password. Please try again.';
+      } else if (err?.code === 'auth/user-not-found') {
+        msg = 'No account found with this email. Please register first.';
+      } else if (err?.code === 'auth/network-request-failed') {
+        msg = 'Network connection failed. Use "Emergency SOS (Offline)" below during network blackouts.';
+      }
+      setErrorMessage(msg);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // ===================== OFFICIAL LOGIN HANDLER =====================
-  const handleOfficialLogin = (e: React.FormEvent) => {
+  const handleOfficialLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -115,30 +138,54 @@ export const LoginScreen: React.FC = () => {
       return;
     }
 
-    // Security check: Verify against authorized emergency official database.
-    const match = AUTHORIZED_OFFICIALS.find(
-      o => o.officialId.toUpperCase() === normId && o.email.toLowerCase() === normEmail
-    );
+    setIsLoading(true);
 
-    const isWildcardOfficial = normId.startsWith('OFF-') || normId.startsWith('NDRF-') || normId.startsWith('CMD-');
+    try {
+      if (isFirebaseConfigured()) {
+        const account = await loginWithFirebase(normEmail, officialPassword);
+        account.role = 'RESCUE_TEAM';
+        account.userId = normId || account.userId;
+        login(account);
+      } else {
+        // Fallback verification against offline authorized emergency official database
+        const match = AUTHORIZED_OFFICIALS.find(
+          o => o.officialId.toUpperCase() === normId && o.email.toLowerCase() === normEmail
+        );
 
-    if (!match && !isWildcardOfficial) {
-      setErrorMessage('Access Denied: Unrecognized Official ID or unauthorized email. Official accounts must be pre-authorized by Disaster Management.');
-      return;
+        const isWildcardOfficial = normId.startsWith('OFF-') || normId.startsWith('NDRF-') || normId.startsWith('CMD-');
+
+        if (!match && !isWildcardOfficial) {
+          setErrorMessage('Access Denied: Unrecognized Official ID or unauthorized email. Official accounts must be pre-authorized by Disaster Management.');
+          return;
+        }
+
+        const officialName = match ? match.name : `Officer ${normId} (HQ)`;
+        const badgeId = match ? match.badgeId : 'DEV-CMD-AUTH';
+
+        const account: UserAccount = {
+          userId: normId,
+          name: officialName,
+          phoneId: badgeId,
+          role: 'RESCUE_TEAM', // Officially granted rescue responder role
+          emergencyContact: '+91 100 / HQ-DISPATCH'
+        };
+
+        login(account);
+      }
+    } catch (err: any) {
+      console.error('[LIFELINE Official Login Error]', err);
+      let msg = err?.message || 'Official verification failed.';
+      if (err?.code === 'auth/invalid-credential' || err?.code === 'auth/wrong-password') {
+        msg = 'Invalid official credentials. Please check your password.';
+      } else if (err?.code === 'auth/user-not-found') {
+        msg = 'Official email not found in Firebase registry.';
+      } else if (err?.code === 'auth/network-request-failed') {
+        msg = 'Network connection failed. Switch to local offline mesh access.';
+      }
+      setErrorMessage(msg);
+    } finally {
+      setIsLoading(false);
     }
-
-    const officialName = match ? match.name : `Officer ${normId} (HQ)`;
-    const badgeId = match ? match.badgeId : 'DEV-CMD-AUTH';
-
-    const account: UserAccount = {
-      userId: normId,
-      name: officialName,
-      phoneId: badgeId,
-      role: 'RESCUE_TEAM', // Officially granted rescue responder role
-      emergencyContact: '+91 100 / HQ-DISPATCH'
-    };
-
-    login(account);
   };
 
   // ===================== EMERGENCY OFFLINE SOS ACCESS =====================
@@ -183,7 +230,7 @@ export const LoginScreen: React.FC = () => {
           display: 'flex',
           flexDirection: 'column',
           gap: 16,
-          background: '#F8FAFC',
+          background: 'var(--bg-card-subtle)',
           minHeight: '100%'
         }}
       >
@@ -203,10 +250,10 @@ export const LoginScreen: React.FC = () => {
           >
             <Shield size={30} />
           </div>
-          <h1 style={{ fontSize: 24, fontWeight: 900, color: '#0F172A', letterSpacing: 0.5 }}>
+          <h1 style={{ fontSize: 24, fontWeight: 900, color: 'var(--text-main)', letterSpacing: 0.5 }}>
             {t('appName')}
           </h1>
-          <p style={{ fontSize: 13, color: '#64748B', fontWeight: 500 }}>
+          <p style={{ fontSize: 13, color: 'var(--text-sub)', fontWeight: 500 }}>
             {t('appTagline')}
           </p>
         </div>
@@ -224,7 +271,7 @@ export const LoginScreen: React.FC = () => {
           display: 'flex',
           flexDirection: 'column',
           gap: 16,
-          background: '#F8FAFC',
+          background: 'var(--bg-card-subtle)',
           minHeight: '100%'
         }}
       >
@@ -244,10 +291,10 @@ export const LoginScreen: React.FC = () => {
           >
             <Shield size={30} />
           </div>
-          <h1 style={{ fontSize: 24, fontWeight: 900, color: '#0F172A', letterSpacing: 0.5 }}>
+          <h1 style={{ fontSize: 24, fontWeight: 900, color: 'var(--text-main)', letterSpacing: 0.5 }}>
             {t('appName')}
           </h1>
-          <p style={{ fontSize: 13, color: '#64748B', fontWeight: 500 }}>
+          <p style={{ fontSize: 13, color: 'var(--text-sub)', fontWeight: 500 }}>
             {t('appTagline')}
           </p>
         </div>
@@ -264,7 +311,7 @@ export const LoginScreen: React.FC = () => {
         display: 'flex',
         flexDirection: 'column',
         gap: 16,
-        background: '#F8FAFC',
+        background: 'var(--bg-card-subtle)',
         minHeight: '100%'
       }}
     >
@@ -285,10 +332,10 @@ export const LoginScreen: React.FC = () => {
         >
           <Shield size={30} />
         </div>
-        <h1 style={{ fontSize: 24, fontWeight: 900, color: '#0F172A', letterSpacing: 0.5 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 900, color: 'var(--text-main)', letterSpacing: 0.5 }}>
           {t('appName')}
         </h1>
-        <p style={{ fontSize: 13, color: '#64748B', fontWeight: 500 }}>
+        <p style={{ fontSize: 13, color: 'var(--text-sub)', fontWeight: 500 }}>
           {t('appTagline')}
         </p>
 
@@ -301,23 +348,26 @@ export const LoginScreen: React.FC = () => {
       {/* Main Card */}
       <div
         style={{
-          background: '#FFFFFF',
-          border: '1px solid #E2E8F0',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-card)',
           borderRadius: 20,
           padding: '20px',
           display: 'flex',
           flexDirection: 'column',
           gap: 16,
-          boxShadow: '0 4px 14px rgba(0, 0, 0, 0.04)'
+          boxShadow: '0 4px 14px rgba(0, 0, 0, 0.06)'
         }}
       >
         <div style={{ textAlign: 'center' }}>
-          <h2 style={{ fontSize: 18, fontWeight: 800, color: '#0F172A', margin: '0 0 4px 0' }}>
+          <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-main)', margin: '0 0 4px 0' }}>
             {t('authTitle')}
           </h2>
-          <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>
+          <p style={{ fontSize: 12, color: 'var(--text-sub)', margin: 0 }}>
             Connect to local emergency mesh network
           </p>
+          <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, background: isFirebaseConfigured() ? 'rgba(16, 185, 129, 0.12)' : 'rgba(56, 189, 248, 0.12)', color: isFirebaseConfigured() ? 'var(--color-safe)' : 'var(--color-primary)', border: '1px solid var(--border-card)' }}>
+            <span>{isFirebaseConfigured() ? '🔥 Firebase Authorized Login Active' : '⚡ Local Disaster Mode (Firebase Ready)'}</span>
+          </div>
         </div>
 
         {/* Role Select Tabs: PEOPLE vs OFFICIAL */}
@@ -326,7 +376,8 @@ export const LoginScreen: React.FC = () => {
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
             gap: 8,
-            background: '#F1F5F9',
+            background: 'var(--bg-card-subtle)',
+            border: '1px solid var(--border-card)',
             padding: '4px',
             borderRadius: 12
           }}
@@ -343,8 +394,8 @@ export const LoginScreen: React.FC = () => {
               fontSize: 12,
               fontWeight: 800,
               border: loginType === 'PEOPLE' ? '2px solid #2563EB' : '1px solid transparent',
-              background: loginType === 'PEOPLE' ? '#FFFFFF' : 'transparent',
-              color: loginType === 'PEOPLE' ? '#2563EB' : '#64748B',
+              background: loginType === 'PEOPLE' ? 'var(--bg-card)' : 'transparent',
+              color: loginType === 'PEOPLE' ? '#2563EB' : 'var(--text-sub)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -370,8 +421,8 @@ export const LoginScreen: React.FC = () => {
               fontSize: 12,
               fontWeight: 800,
               border: loginType === 'OFFICIAL' ? '2px solid #2563EB' : '1px solid transparent',
-              background: loginType === 'OFFICIAL' ? '#FFFFFF' : 'transparent',
-              color: loginType === 'OFFICIAL' ? '#2563EB' : '#64748B',
+              background: loginType === 'OFFICIAL' ? 'var(--bg-card)' : 'transparent',
+              color: loginType === 'OFFICIAL' ? '#2563EB' : 'var(--text-sub)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -411,15 +462,15 @@ export const LoginScreen: React.FC = () => {
         {loginType === 'PEOPLE' && (
           <form onSubmit={handlePeopleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5, display: 'block' }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-main)', marginBottom: 5, display: 'block' }}>
                 Email Address
               </label>
               <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  background: '#FFFFFF',
-                  border: '1px solid #CBD5E1',
+                  background: 'var(--bg-card-subtle)',
+                  border: '1px solid var(--border-card)',
                   borderRadius: 10,
                   padding: '0 12px',
                   height: 46
@@ -436,7 +487,7 @@ export const LoginScreen: React.FC = () => {
                     background: 'transparent',
                     border: 'none',
                     padding: '0 10px',
-                    color: '#0F172A',
+                    color: 'var(--text-main)',
                     fontSize: 13,
                     outline: 'none',
                     fontWeight: 600
@@ -446,15 +497,15 @@ export const LoginScreen: React.FC = () => {
             </div>
 
             <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5, display: 'block' }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-main)', marginBottom: 5, display: 'block' }}>
                 Password
               </label>
               <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  background: '#FFFFFF',
-                  border: '1px solid #CBD5E1',
+                  background: 'var(--bg-card-subtle)',
+                  border: '1px solid var(--border-card)',
                   borderRadius: 10,
                   padding: '0 12px',
                   height: 46
@@ -471,7 +522,7 @@ export const LoginScreen: React.FC = () => {
                     background: 'transparent',
                     border: 'none',
                     padding: '0 10px',
-                    color: '#0F172A',
+                    color: 'var(--text-main)',
                     fontSize: 13,
                     outline: 'none'
                   }}
@@ -489,6 +540,7 @@ export const LoginScreen: React.FC = () => {
 
             <button
               type="submit"
+              disabled={isLoading}
               style={{
                 height: 48,
                 background: '#2563EB',
@@ -497,12 +549,24 @@ export const LoginScreen: React.FC = () => {
                 color: '#FFFFFF',
                 fontWeight: 700,
                 fontSize: 14,
-                cursor: 'pointer',
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                opacity: isLoading ? 0.75 : 1,
                 boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
-                marginTop: 4
+                marginTop: 4,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8
               }}
             >
-              {t('continueBtn')}
+              {isLoading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Authenticating with Firebase...</span>
+                </>
+              ) : (
+                <span>{t('continueBtn')}</span>
+              )}
             </button>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 2, padding: '0 2px' }}>
@@ -547,15 +611,15 @@ export const LoginScreen: React.FC = () => {
             </div>
 
             <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5, display: 'block' }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-main)', marginBottom: 5, display: 'block' }}>
                 Official ID
               </label>
               <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  background: '#FFFFFF',
-                  border: '1px solid #CBD5E1',
+                  background: 'var(--bg-card-subtle)',
+                  border: '1px solid var(--border-card)',
                   borderRadius: 10,
                   padding: '0 12px',
                   height: 46
@@ -572,7 +636,7 @@ export const LoginScreen: React.FC = () => {
                     background: 'transparent',
                     border: 'none',
                     padding: '0 10px',
-                    color: '#0F172A',
+                    color: 'var(--text-main)',
                     fontSize: 13,
                     outline: 'none',
                     fontWeight: 600
@@ -582,15 +646,15 @@ export const LoginScreen: React.FC = () => {
             </div>
 
             <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5, display: 'block' }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-main)', marginBottom: 5, display: 'block' }}>
                 Official Email
               </label>
               <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  background: '#FFFFFF',
-                  border: '1px solid #CBD5E1',
+                  background: 'var(--bg-card-subtle)',
+                  border: '1px solid var(--border-card)',
                   borderRadius: 10,
                   padding: '0 12px',
                   height: 46
@@ -607,7 +671,7 @@ export const LoginScreen: React.FC = () => {
                     background: 'transparent',
                     border: 'none',
                     padding: '0 10px',
-                    color: '#0F172A',
+                    color: 'var(--text-main)',
                     fontSize: 13,
                     outline: 'none',
                     fontWeight: 600
@@ -617,15 +681,15 @@ export const LoginScreen: React.FC = () => {
             </div>
 
             <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5, display: 'block' }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-main)', marginBottom: 5, display: 'block' }}>
                 Password
               </label>
               <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  background: '#FFFFFF',
-                  border: '1px solid #CBD5E1',
+                  background: 'var(--bg-card-subtle)',
+                  border: '1px solid var(--border-card)',
                   borderRadius: 10,
                   padding: '0 12px',
                   height: 46
@@ -642,7 +706,7 @@ export const LoginScreen: React.FC = () => {
                     background: 'transparent',
                     border: 'none',
                     padding: '0 10px',
-                    color: '#0F172A',
+                    color: 'var(--text-main)',
                     fontSize: 13,
                     outline: 'none'
                   }}
@@ -660,6 +724,7 @@ export const LoginScreen: React.FC = () => {
 
             <button
               type="submit"
+              disabled={isLoading}
               style={{
                 height: 48,
                 background: '#0284C7',
@@ -668,12 +733,24 @@ export const LoginScreen: React.FC = () => {
                 color: '#FFFFFF',
                 fontWeight: 700,
                 fontSize: 14,
-                cursor: 'pointer',
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                opacity: isLoading ? 0.75 : 1,
                 boxShadow: '0 4px 12px rgba(2, 132, 199, 0.25)',
-                marginTop: 4
+                marginTop: 4,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8
               }}
             >
-              OFFICIAL LOGIN
+              {isLoading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Verifying Official Authorization...</span>
+                </>
+              ) : (
+                <span>OFFICIAL LOGIN</span>
+              )}
             </button>
 
             <div style={{ textAlign: 'center', marginTop: 2 }}>
@@ -689,7 +766,7 @@ export const LoginScreen: React.FC = () => {
         )}
 
         {/* ===================== EMERGENCY ACCESS BUTTON ===================== */}
-        <div style={{ marginTop: 12, paddingTop: 14, borderTop: '1px solid #E2E8F0' }}>
+        <div style={{ marginTop: 12, paddingTop: 14, borderTop: '1px solid var(--border-card)' }}>
           <button
             type="button"
             onClick={handleEmergencySosAccess}
@@ -715,14 +792,14 @@ export const LoginScreen: React.FC = () => {
             <AlertCircle size={18} />
             <span>EMERGENCY OFFLINE SOS (NO LOGIN)</span>
           </button>
-          <div style={{ fontSize: 11, color: '#64748B', textAlign: 'center', marginTop: 6 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-sub)', textAlign: 'center', marginTop: 6 }}>
             Immediate offline SOS transmission in critical danger
           </div>
         </div>
 
         {/* Quick Demo Credentials */}
-        <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: 12 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textAlign: 'center', textTransform: 'uppercase' }}>
+        <div style={{ borderTop: '1px solid var(--border-card)', paddingTop: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-sub)', textAlign: 'center', textTransform: 'uppercase' }}>
             ⚡ 1-Click Evaluation Demo Access
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
@@ -731,12 +808,12 @@ export const LoginScreen: React.FC = () => {
               onClick={quickLoginVictim}
               style={{
                 height: 38,
-                background: '#F1F5F9',
-                border: '1px solid #CBD5E1',
+                background: 'var(--bg-card-subtle)',
+                border: '1px solid var(--border-card)',
                 borderRadius: 10,
                 fontSize: 12,
                 fontWeight: 700,
-                color: '#0F172A',
+                color: 'var(--text-main)',
                 cursor: 'pointer'
               }}
             >
@@ -747,8 +824,8 @@ export const LoginScreen: React.FC = () => {
               onClick={quickLoginOfficial}
               style={{
                 height: 38,
-                background: '#EFF6FF',
-                border: '1px solid #BFDBFE',
+                background: 'var(--color-primary-light, #EFF6FF)',
+                border: '1px solid var(--border-card-highlight)',
                 borderRadius: 10,
                 fontSize: 12,
                 fontWeight: 700,

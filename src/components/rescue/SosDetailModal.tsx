@@ -49,15 +49,16 @@ export const SosDetailModal: React.FC<Props> = ({
         {/* Modal Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>TECHNICAL TELEMETRY</div>
-            <h3 style={{ fontSize: 18, fontWeight: 900, color: '#0F172A' }}>SOS PACKET INSPECTOR</h3>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-sub)' }}>TECHNICAL TELEMETRY</div>
+            <h3 style={{ fontSize: 18, fontWeight: 900, color: 'var(--text-main)' }}>SOS PACKET INSPECTOR</h3>
           </div>
           <button
             onClick={onClose}
+            aria-label="Close"
             style={{
-              background: '#F1F5F9',
-              border: 'none',
-              color: '#0F172A',
+              background: 'var(--bg-card-subtle)',
+              border: '1px solid var(--border-card)',
+              color: 'var(--text-main)',
               width: 34,
               height: 34,
               borderRadius: '50%',
@@ -76,22 +77,23 @@ export const SosDetailModal: React.FC<Props> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span
               style={{
-                background: packet.priority === 'CRITICAL' ? '#FEF2F2' : packet.priority === 'HIGH' ? '#FFFBEB' : '#F0FDF4',
-                color: packet.priority === 'CRITICAL' ? '#DC2626' : packet.priority === 'HIGH' ? '#D97706' : '#16A34A',
+                background: packet.priority === 'CRITICAL' ? 'var(--color-critical-light)' : packet.priority === 'HIGH' ? 'var(--color-warning-light)' : 'var(--color-safe-light)',
+                color: packet.priority === 'CRITICAL' ? 'var(--color-critical)' : packet.priority === 'HIGH' ? 'var(--color-warning)' : 'var(--color-safe)',
                 fontWeight: 800,
                 fontSize: 12,
                 padding: '4px 10px',
-                borderRadius: 8
+                borderRadius: 8,
+                border: '1px solid var(--border-card)'
               }}
             >
               {packet.priority} PRIORITY
             </span>
-            <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#2563EB', fontSize: 14 }}>
+            <span style={{ fontFamily: 'monospace', fontWeight: 800, color: 'var(--color-primary)', fontSize: 14 }}>
               {packet.id}
             </span>
           </div>
 
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#0F172A' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-main)' }}>
             {packet.status}
           </span>
         </div>
@@ -99,8 +101,8 @@ export const SosDetailModal: React.FC<Props> = ({
         {/* Victim Info Card */}
         <div
           style={{
-            background: '#F8FAFC',
-            border: '1px solid #E2E8F0',
+            background: 'var(--bg-card-subtle)',
+            border: '1px solid var(--border-card)',
             borderRadius: 14,
             padding: 14,
             display: 'flex',
@@ -110,47 +112,47 @@ export const SosDetailModal: React.FC<Props> = ({
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#64748B' }}>Sender ID:</span>
-            <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#0F172A' }}>
+            <span style={{ color: 'var(--text-sub)' }}>Sender ID:</span>
+            <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--text-main)' }}>
               {packet.senderId || packet.userId}
             </span>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#64748B' }}>Device ID:</span>
-            <span style={{ fontFamily: 'monospace', color: '#0F172A', fontWeight: 700 }}>{packet.deviceId}</span>
+            <span style={{ color: 'var(--text-sub)' }}>Device ID:</span>
+            <span style={{ fontFamily: 'monospace', color: 'var(--text-main)', fontWeight: 700 }}>{packet.deviceId}</span>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#64748B' }}>GPS Coordinates:</span>
-            <span style={{ fontFamily: 'monospace', color: '#0F172A' }}>
+            <span style={{ color: 'var(--text-sub)' }}>GPS Coordinates:</span>
+            <span style={{ fontFamily: 'monospace', color: 'var(--text-main)' }}>
               {packet.latitude.toFixed(4)}, {packet.longitude.toFixed(4)} (±{packet.gpsAccuracy}m)
             </span>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#64748B' }}>Distance to Base:</span>
-            <span style={{ fontWeight: 700, color: '#2563EB' }}>{packet.distanceFromRescueKm} km</span>
+            <span style={{ color: 'var(--text-sub)' }}>Distance to Base:</span>
+            <span style={{ fontWeight: 700, color: 'var(--color-primary)' }}>{packet.distanceFromRescueKm} km</span>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#64748B' }}>Battery:</span>
-            <span style={{ color: '#0F172A', fontWeight: 700 }}>{packet.batteryLevel}%</span>
+            <span style={{ color: 'var(--text-sub)' }}>Battery:</span>
+            <span style={{ color: 'var(--text-main)', fontWeight: 700 }}>{packet.batteryLevel}%</span>
           </div>
         </div>
 
         {/* Message Content */}
         <div
           style={{
-            background: '#FEF2F2',
-            border: '1px solid #FECACA',
+            background: 'var(--color-critical-light)',
+            border: '1px solid var(--border-card)',
             borderRadius: 12,
             padding: 12,
             fontSize: 13,
-            color: '#991B1B'
+            color: 'var(--text-main)'
           }}
         >
-          <div style={{ fontSize: 11, fontWeight: 800, color: '#DC2626', textTransform: 'uppercase', marginBottom: 2 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-critical)', textTransform: 'uppercase', marginBottom: 2 }}>
             Emergency Distress Message:
           </div>
           "{packet.message}"
@@ -159,8 +161,8 @@ export const SosDetailModal: React.FC<Props> = ({
         {/* Cryptography Info */}
         <div
           style={{
-            background: '#F0FDF4',
-            border: '1px solid #BBF7D0',
+            background: 'var(--color-safe-light)',
+            border: '1px solid var(--border-card)',
             borderRadius: 12,
             padding: 12,
             display: 'flex',
@@ -170,18 +172,18 @@ export const SosDetailModal: React.FC<Props> = ({
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#16A34A', fontWeight: 800 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-safe)', fontWeight: 800 }}>
               <ShieldCheck size={16} />
               <span>AUTHENTICATED ENCRYPTION</span>
             </div>
-            <span style={{ fontFamily: 'monospace', color: '#16A34A', fontWeight: 700 }}>AES-GCM-256</span>
+            <span style={{ fontFamily: 'monospace', color: 'var(--color-safe)', fontWeight: 700 }}>AES-GCM-256</span>
           </div>
 
           <button
             onClick={handleTestDecryption}
             style={{
               height: 38,
-              background: '#16A34A',
+              background: 'var(--color-safe)',
               color: '#FFFFFF',
               border: 'none',
               borderRadius: 8,
@@ -195,7 +197,7 @@ export const SosDetailModal: React.FC<Props> = ({
           </button>
 
           {decryptedData && (
-            <pre style={{ background: '#FFFFFF', padding: 8, borderRadius: 6, fontSize: 11, color: '#0F172A', overflowX: 'auto' }}>
+            <pre style={{ background: 'var(--bg-app)', border: '1px solid var(--border-card)', padding: 8, borderRadius: 6, fontSize: 11, color: 'var(--text-main)', overflowX: 'auto' }}>
               {JSON.stringify(decryptedData, null, 2)}
             </pre>
           )}

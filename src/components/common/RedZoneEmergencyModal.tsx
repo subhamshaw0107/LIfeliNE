@@ -36,10 +36,10 @@ export const RedZoneEmergencyModal: React.FC<Props> = ({
         style={{
           width: '100%',
           maxWidth: '420px',
-          background: '#FFFFFF',
-          border: '2px solid #DC2626',
+          background: 'var(--bg-card)',
+          border: '2px solid var(--color-critical)',
           borderRadius: '20px',
-          boxShadow: '0 16px 40px rgba(0, 0, 0, 0.15)',
+          boxShadow: '0 16px 40px rgba(0, 0, 0, 0.4)',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column'
@@ -48,7 +48,7 @@ export const RedZoneEmergencyModal: React.FC<Props> = ({
         {/* Top Emergency Beacon Bar */}
         <div
           style={{
-            background: '#DC2626',
+            background: 'var(--color-critical)',
             color: '#FFFFFF',
             padding: '12px 16px',
             display: 'flex',
@@ -62,6 +62,7 @@ export const RedZoneEmergencyModal: React.FC<Props> = ({
           </div>
           <button
             onClick={onClose}
+            aria-label="Close"
             style={{
               background: 'transparent',
               border: 'none',
@@ -78,23 +79,23 @@ export const RedZoneEmergencyModal: React.FC<Props> = ({
         {/* Modal Body */}
         <div style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 13, fontWeight: 800, color: '#DC2626', background: '#FEF2F2', padding: '4px 10px', borderRadius: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-critical)', background: 'var(--color-critical-light)', border: '1px solid var(--border-card)', padding: '4px 10px', borderRadius: 8 }}>
               HIGH PRIORITY DISASTER
             </span>
-            <span style={{ fontSize: 12, color: '#64748B', fontWeight: 600 }}>{packet.timeFormatted}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-sub)', fontWeight: 600 }}>{packet.timeFormatted}</span>
           </div>
 
-          <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A' }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-main)' }}>
             Victim: {packet.senderId || packet.userId}
           </div>
 
-          <div style={{ fontSize: 14, color: '#334155', background: '#F8FAFC', padding: '12px', borderRadius: 12, border: '1px solid #E2E8F0', fontStyle: 'italic' }}>
+          <div style={{ fontSize: 14, color: 'var(--text-main)', background: 'var(--bg-card-subtle)', padding: '12px', borderRadius: 12, border: '1px solid var(--border-card)', fontStyle: 'italic' }}>
             "{packet.message || 'Emergency assistance needed in red zone.'}"
           </div>
 
-          <div style={{ fontSize: 13, color: '#475569', display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div>Location: <strong>{packet.disasterZoneName || 'Flood Zone A'}</strong></div>
-            <div>Distance from Base: <strong>{packet.distanceFromRescueKm} km</strong></div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div>Location: <strong style={{ color: 'var(--text-main)' }}>{packet.disasterZoneName || 'Flood Zone A'}</strong></div>
+            <div>Distance from Base: <strong style={{ color: 'var(--color-primary)' }}>{packet.distanceFromRescueKm} km</strong></div>
           </div>
 
           <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
@@ -107,7 +108,7 @@ export const RedZoneEmergencyModal: React.FC<Props> = ({
                 style={{
                   flex: 1,
                   height: 46,
-                  background: '#2563EB',
+                  background: 'var(--color-primary)',
                   border: 'none',
                   borderRadius: 12,
                   color: '#FFFFFF',
@@ -134,10 +135,10 @@ export const RedZoneEmergencyModal: React.FC<Props> = ({
                 style={{
                   flex: 1,
                   height: 46,
-                  background: '#F1F5F9',
-                  border: '1px solid #CBD5E1',
+                  background: 'var(--bg-card-subtle)',
+                  border: '1px solid var(--border-card)',
                   borderRadius: 12,
-                  color: '#0F172A',
+                  color: 'var(--text-main)',
                   fontWeight: 700,
                   fontSize: 13,
                   cursor: 'pointer',

@@ -109,7 +109,7 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
           </button>
         ) : <div />}
 
-        <div style={{ fontWeight: 800, fontSize: 16, color: '#0F172A' }}>
+        <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--text-main)' }}>
           {t('radarHeader')}
         </div>
         <div style={{ width: 40 }} />
@@ -120,28 +120,28 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
       {/* Network Overview Card */}
       <div
         style={{
-          background: '#FFFFFF',
-          border: '1px solid #E2E8F0',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-card)',
           borderRadius: 16,
-          padding: 16,
+          padding: '16px',
           display: 'flex',
           flexDirection: 'column',
-          gap: 8,
+          gap: 6,
           boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Radio size={20} color="#16A34A" />
-            <span style={{ fontSize: 15, fontWeight: 800, color: '#0F172A' }}>
+            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-main)' }}>
               {t('connectedPeers')}: {Math.max(0, activeHops.length - 1)} Nodes
             </span>
           </div>
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#16A34A', background: '#F0FDF4', padding: '3px 8px', borderRadius: 8 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#16A34A', background: 'var(--color-safe-light, #F0FDF4)', padding: '3px 8px', borderRadius: 8 }}>
             {meshStatus}
           </span>
         </div>
-        <p style={{ fontSize: 12, color: '#64748B' }}>
+        <p style={{ fontSize: 12, color: 'var(--text-sub)' }}>
           {t('radarSubtitle')} (Bluetooth Low Energy Store-Carry-Forward)
         </p>
 
@@ -151,12 +151,12 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
             style={{
               marginTop: 6,
               height: 38,
-              background: '#F1F5F9',
-              border: '1px solid #CBD5E1',
+              background: 'var(--bg-card-subtle)',
+              border: '1px solid var(--border-card)',
               borderRadius: 10,
               fontSize: 12,
               fontWeight: 700,
-              color: '#0F172A',
+              color: 'var(--text-main)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -190,8 +190,8 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
 
       {/* Interactive Clean Radar Visualizer */}
       <div style={{
-        background: '#FFFFFF',
-        border: '1px solid #E2E8F0',
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-card)',
         borderRadius: 16,
         padding: '16px',
         display: 'flex',
@@ -211,7 +211,7 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
           width: 170,
           height: 170,
           borderRadius: '50%',
-          border: '1.5px dashed #CBD5E1',
+          border: '1.5px dashed var(--border-card-highlight)',
           pointerEvents: 'none'
         }} />
         <div style={{
@@ -222,7 +222,7 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
           width: 100,
           height: 100,
           borderRadius: '50%',
-          border: '1.5px solid #E2E8F0',
+          border: '1.5px solid var(--border-card)',
           pointerEvents: 'none'
         }} />
 
@@ -312,7 +312,7 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
 
       {/* Node Chain List */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0F172A' }}>
+        <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-main)' }}>
           Active Mesh Topology Chain:
         </h3>
 
@@ -320,8 +320,8 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
           <div
             key={idx}
             style={{
-              background: '#FFFFFF',
-              border: `1px solid ${hop.inRange ? '#E2E8F0' : '#FECACA'}`,
+              background: 'var(--bg-card)',
+              border: `1px solid ${hop.inRange ? 'var(--border-card)' : 'rgba(239, 68, 68, 0.4)'}`,
               borderRadius: 14,
               padding: '12px 14px',
               display: 'flex',
@@ -348,13 +348,13 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
                 {idx + 1}
               </div>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>{hop.title}</div>
-                <div style={{ fontSize: 12, color: '#64748B' }}>{hop.sub}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-main)' }}>{hop.title}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-sub)' }}>{hop.sub}</div>
               </div>
             </div>
 
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#0F172A' }}>{hop.dist}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-main)' }}>{hop.dist}</div>
               <div style={{ fontSize: 11, fontWeight: 700, color: hop.inRange ? '#16A34A' : '#DC2626' }}>
                 {hop.inRange ? 'CONNECTED' : 'DISCONNECTED'}
               </div>
