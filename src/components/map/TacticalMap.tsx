@@ -750,7 +750,7 @@ export const TacticalMap: React.FC<Props> = ({ isRescueView = false, onSelectSos
           style={{
             position: 'absolute',
             inset: 0,
-            background: '#0B1120',
+            background: '#F8FAFC',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -766,33 +766,35 @@ export const TacticalMap: React.FC<Props> = ({ isRescueView = false, onSelectSos
               width: 54,
               height: 54,
               borderRadius: '50%',
-              background: 'rgba(239, 68, 68, 0.15)',
+              background: '#FEF2F2',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#EF4444'
+              color: '#DC2626'
             }}
           >
             <WifiOff size={28} />
           </div>
 
-          <div style={{ fontSize: 16, fontWeight: 900, color: '#FFF' }}>
+          <div style={{ fontSize: 16, fontWeight: 900, color: '#0F172A' }}>
             MAP TILES OFFLINE
           </div>
 
-          <div style={{ fontSize: 12, color: '#94A3B8', maxWidth: 280 }}>
+          <div style={{ fontSize: 13, color: '#475569', maxWidth: 280 }}>
             Device GPS coordinates and Store-Carry-Forward mesh routing remain fully operational.
           </div>
 
           <button
             onClick={() => setSimulateOfflineMapTiles(false)}
             style={{
-              background: '#0284C7',
+              height: 40,
+              background: '#2563EB',
               border: 'none',
-              borderRadius: 8,
-              padding: '8px 16px',
-              color: '#FFF',
+              borderRadius: 10,
+              padding: '0 20px',
+              color: '#FFFFFF',
               fontWeight: 700,
+              fontSize: 13,
               cursor: 'pointer'
             }}
           >
@@ -805,40 +807,41 @@ export const TacticalMap: React.FC<Props> = ({ isRescueView = false, onSelectSos
       <div
         style={{
           position: 'absolute',
-          bottom: 8,
-          left: 10,
-          right: 10,
+          bottom: 12,
+          left: 12,
+          right: 12,
           zIndex: 400,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          background: 'rgba(15, 23, 42, 0.92)',
-          backdropFilter: 'blur(8px)',
-          padding: '5px 10px',
-          borderRadius: 8,
-          fontSize: 10,
+          background: '#FFFFFF',
+          border: '1px solid #CBD5E1',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+          padding: '6px 12px',
+          borderRadius: 12,
+          fontSize: 12,
           pointerEvents: 'auto'
         }}
       >
-        <div style={{ color: '#94A3B8', display: 'flex', alignItems: 'center', gap: 5 }}>
-          <span style={{ color: mapEngine === 'GOOGLE' ? '#38BDF8' : '#10B981' }}>●</span>
-          <span>{mapEngine === 'GOOGLE' ? 'Google Maps JavaScript API' : 'Tactical Offline Vector Map'}</span>
+        <div style={{ color: '#475569', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+          <span style={{ color: '#16A34A', fontSize: 14 }}>●</span>
+          <span>{mapEngine === 'GOOGLE' ? 'Google Maps API' : 'Tactical Vector Map'}</span>
         </div>
 
         <button
           onClick={() => setSimulateOfflineMapTiles(!simulateOfflineMapTiles)}
           style={{
-            background: 'transparent',
-            border: '1px solid var(--border-card)',
-            color: '#38BDF8',
-            fontSize: 9,
+            background: '#EFF6FF',
+            border: '1px solid #BFDBFE',
+            color: '#2563EB',
+            fontSize: 12,
             fontWeight: 700,
-            padding: '2px 6px',
-            borderRadius: 4,
+            padding: '4px 10px',
+            borderRadius: 8,
             cursor: 'pointer'
           }}
         >
-          {simulateOfflineMapTiles ? 'Restore' : 'Simulate Offline'}
+          {simulateOfflineMapTiles ? 'Restore' : 'Offline Mode'}
         </button>
       </div>
     </div>

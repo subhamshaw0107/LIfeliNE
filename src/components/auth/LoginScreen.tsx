@@ -3,8 +3,20 @@ import { useApp } from '../../context/AppContext';
 import { cryptoService } from '../../services/cryptoService';
 import { RegistrationScreen } from './RegistrationScreen';
 import { ForgotPasswordModal } from './ForgotPasswordModal';
-import { Mail, Lock, Eye, EyeOff, Radio, Shield, BadgeCheck, Users, ShieldAlert, AlertTriangle } from 'lucide-react';
+import {
+  Shield,
+  Lock,
+  Mail,
+  Eye,
+  EyeOff,
+  Users,
+  ShieldAlert,
+  AlertTriangle,
+  BadgeCheck,
+  AlertCircle
+} from 'lucide-react';
 import { UserAccount, UserRole } from '../../types';
+import { LanguageSelector } from '../common/LanguageSelector';
 
 type AuthView = 'LOGIN' | 'REGISTER' | 'FORGOT_PASSWORD';
 type LoginType = 'PEOPLE' | 'OFFICIAL';
@@ -26,7 +38,7 @@ const AUTHORIZED_OFFICIALS: AuthorizedOfficial[] = [
 ];
 
 export const LoginScreen: React.FC = () => {
-  const { login } = useApp();
+  const { login, t } = useApp();
   const [currentView, setCurrentView] = useState<AuthView>('LOGIN');
   const [loginType, setLoginType] = useState<LoginType>('PEOPLE');
 
@@ -145,7 +157,7 @@ export const LoginScreen: React.FC = () => {
   const quickLoginVictim = () => {
     login({
       userId: 'PERSON-A',
-      name: 'PERSON-A (Citizen)',
+      name: 'Subham (Civilian)',
       phoneId: 'DEV-A8F31C',
       role: 'VICTIM',
       emergencyContact: '+91 98765 43210'
@@ -162,410 +174,590 @@ export const LoginScreen: React.FC = () => {
     });
   };
 
+  // View: Registration
   if (currentView === 'REGISTER') {
     return (
-      <div className="lifeline-auth-page">
-        <div className="splash-stars-bg" />
-        <div className="auth-earth-curvature" />
-
-        <div className="auth-brand-header">
-          <div className="auth-brand-icon">
-            <Radio size={22} color="#EF4444" />
+      <div
+        style={{
+          padding: '20px 18px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16,
+          background: '#F8FAFC',
+          minHeight: '100%'
+        }}
+      >
+        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, marginTop: 10 }}>
+          <div
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 16,
+              background: '#2563EB',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#FFFFFF',
+              boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)'
+            }}
+          >
+            <Shield size={30} />
           </div>
-          <h1 className="auth-brand-title">LIFELINE</h1>
-          <div className="auth-brand-subtitle">
-            OFFLINE COMMUNICATION & RESCUE NETWORK
-          </div>
+          <h1 style={{ fontSize: 24, fontWeight: 900, color: '#0F172A', letterSpacing: 0.5 }}>
+            {t('appName')}
+          </h1>
+          <p style={{ fontSize: 13, color: '#64748B', fontWeight: 500 }}>
+            {t('appTagline')}
+          </p>
         </div>
-
         <RegistrationScreen onNavigateToLogin={() => setCurrentView('LOGIN')} />
       </div>
     );
   }
 
+  // View: Forgot Password
   if (currentView === 'FORGOT_PASSWORD') {
     return (
-      <div className="lifeline-auth-page">
-        <div className="splash-stars-bg" />
-        <div className="auth-earth-curvature" />
-
-        <div className="auth-brand-header">
-          <div className="auth-brand-icon">
-            <Radio size={22} color="#EF4444" />
+      <div
+        style={{
+          padding: '20px 18px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16,
+          background: '#F8FAFC',
+          minHeight: '100%'
+        }}
+      >
+        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, marginTop: 10 }}>
+          <div
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 16,
+              background: '#2563EB',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#FFFFFF',
+              boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)'
+            }}
+          >
+            <Shield size={30} />
           </div>
-          <h1 className="auth-brand-title">LIFELINE</h1>
-          <div className="auth-brand-subtitle">
-            OFFLINE COMMUNICATION & RESCUE NETWORK
-          </div>
+          <h1 style={{ fontSize: 24, fontWeight: 900, color: '#0F172A', letterSpacing: 0.5 }}>
+            {t('appName')}
+          </h1>
+          <p style={{ fontSize: 13, color: '#64748B', fontWeight: 500 }}>
+            {t('appTagline')}
+          </p>
         </div>
-
         <ForgotPasswordModal onBackToLogin={() => setCurrentView('LOGIN')} />
       </div>
     );
   }
 
+  // View: Login Main Screen
   return (
-    <div className="lifeline-auth-page">
-      {/* Background Visual Environment: Stars & Earth Curvature */}
-      <div className="splash-stars-bg" />
-      <div className="auth-earth-curvature" />
-
-      {/* Atmospheric Top Glow */}
-      <div
-        style={{
-          position: 'absolute',
-          top: '-15%',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: '320px',
-          height: '200px',
-          background: 'radial-gradient(ellipse, rgba(56, 189, 248, 0.15) 0%, rgba(239, 68, 68, 0.05) 50%, transparent 80%)',
-          filter: 'blur(28px)',
-          pointerEvents: 'none'
-        }}
-      />
-
-      {/* Top Header: LIFELINE Branding */}
-      <div className="auth-brand-header">
-        <div className="auth-brand-icon">
-          <svg width="30" height="30" viewBox="0 0 48 48" fill="none">
-            <path d="M8 16C12.4 11.6 18.5 9 24 9C29.5 9 35.6 11.6 40 16" stroke="#EF4444" strokeWidth="3" strokeLinecap="round" />
-            <path d="M14 22C16.8 19.5 20.2 18 24 18C27.8 18 31.2 19.5 34 22" stroke="#F87171" strokeWidth="3" strokeLinecap="round" />
-            <circle cx="24" cy="33" r="5" fill="#EF4444" />
-            <circle cx="24" cy="33" r="2" fill="#FFFFFF" />
-            <line x1="24" y1="38" x2="24" y2="43" stroke="#38BDF8" strokeWidth="3" strokeLinecap="round" />
-          </svg>
+    <div
+      style={{
+        padding: '20px 18px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 16,
+        background: '#F8FAFC',
+        minHeight: '100%'
+      }}
+    >
+      {/* Brand Header */}
+      <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, marginTop: 10 }}>
+        <div
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: 16,
+            background: '#2563EB',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#FFFFFF',
+            boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)'
+          }}
+        >
+          <Shield size={30} />
         </div>
-        <h1 className="auth-brand-title">LIFELINE</h1>
-        <div className="auth-brand-subtitle">
-          OFFLINE COMMUNICATION & RESCUE NETWORK
+        <h1 style={{ fontSize: 24, fontWeight: 900, color: '#0F172A', letterSpacing: 0.5 }}>
+          {t('appName')}
+        </h1>
+        <p style={{ fontSize: 13, color: '#64748B', fontWeight: 500 }}>
+          {t('appTagline')}
+        </p>
+
+        {/* Central Language Selector */}
+        <div style={{ marginTop: 6 }}>
+          <LanguageSelector compact />
         </div>
       </div>
 
-      {/* Glassmorphism Login Card */}
-      <div className="auth-card-wrapper">
-        <div className="auth-glass-card">
-          <div style={{ textAlign: 'center', marginBottom: 14 }}>
-            <h2 style={{ fontSize: 20, fontWeight: 900, color: '#FFFFFF', letterSpacing: '0.8px', margin: '0 0 4px 0' }}>
-              SIGN IN
-            </h2>
-            <p style={{ fontSize: 11, color: '#94A3B8', margin: 0 }}>
-              Connect to your local disaster mesh node
-            </p>
+      {/* Main Card */}
+      <div
+        style={{
+          background: '#FFFFFF',
+          border: '1px solid #E2E8F0',
+          borderRadius: 20,
+          padding: '20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16,
+          boxShadow: '0 4px 14px rgba(0, 0, 0, 0.04)'
+        }}
+      >
+        <div style={{ textAlign: 'center' }}>
+          <h2 style={{ fontSize: 18, fontWeight: 800, color: '#0F172A', margin: '0 0 4px 0' }}>
+            {t('authTitle')}
+          </h2>
+          <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>
+            Connect to local emergency mesh network
+          </p>
+        </div>
+
+        {/* Role Select Tabs: PEOPLE vs OFFICIAL */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 8,
+            background: '#F1F5F9',
+            padding: '4px',
+            borderRadius: 12
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setLoginType('PEOPLE');
+              setErrorMessage(null);
+            }}
+            style={{
+              padding: '9px 12px',
+              borderRadius: 10,
+              fontSize: 12,
+              fontWeight: 800,
+              border: loginType === 'PEOPLE' ? '2px solid #2563EB' : '1px solid transparent',
+              background: loginType === 'PEOPLE' ? '#FFFFFF' : 'transparent',
+              color: loginType === 'PEOPLE' ? '#2563EB' : '#64748B',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              boxShadow: loginType === 'PEOPLE' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <Users size={15} />
+            <span>{t('roleVictimTitle')}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setLoginType('OFFICIAL');
+              setErrorMessage(null);
+            }}
+            style={{
+              padding: '9px 12px',
+              borderRadius: 10,
+              fontSize: 12,
+              fontWeight: 800,
+              border: loginType === 'OFFICIAL' ? '2px solid #2563EB' : '1px solid transparent',
+              background: loginType === 'OFFICIAL' ? '#FFFFFF' : 'transparent',
+              color: loginType === 'OFFICIAL' ? '#2563EB' : '#64748B',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              boxShadow: loginType === 'OFFICIAL' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <ShieldAlert size={15} />
+            <span>{t('roleRescueTitle')}</span>
+          </button>
+        </div>
+
+        {/* Error Notice */}
+        {errorMessage && (
+          <div
+            style={{
+              background: '#FEF2F2',
+              border: '1px solid #FECACA',
+              borderRadius: 10,
+              padding: '10px 12px',
+              color: '#DC2626',
+              fontSize: 12,
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8
+            }}
+          >
+            <AlertTriangle size={16} color="#DC2626" style={{ flexShrink: 0 }} />
+            <span>{errorMessage}</span>
           </div>
+        )}
 
-          {/* TWO SECTIONS: [ 👤 PEOPLE ]    [ 🛡️ OFFICIAL ] */}
-          <div style={{ marginBottom: 16 }}>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: 8,
-              background: 'rgba(4, 7, 17, 0.65)',
-              padding: '4px',
-              borderRadius: '12px',
-              border: '1px solid rgba(255, 255, 255, 0.08)'
-            }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setLoginType('PEOPLE');
-                  setErrorMessage(null);
-                }}
-                className={`auth-role-select-btn ${loginType === 'PEOPLE' ? 'active-victim' : ''}`}
-                style={{
-                  padding: '9px 12px',
-                  borderRadius: '9px',
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  letterSpacing: '0.5px',
-                  transition: 'all 0.25s ease'
-                }}
-              >
-                <Users size={14} />
-                <span>👤 PEOPLE</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setLoginType('OFFICIAL');
-                  setErrorMessage(null);
-                }}
-                className={`auth-role-select-btn ${loginType === 'OFFICIAL' ? 'active-rescue' : ''}`}
-                style={{
-                  padding: '9px 12px',
-                  borderRadius: '9px',
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  letterSpacing: '0.5px',
-                  transition: 'all 0.25s ease'
-                }}
-              >
-                <ShieldAlert size={14} />
-                <span>🛡️ OFFICIAL</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Error Notice */}
-          {errorMessage && (
-            <div
-              style={{
-                background: 'rgba(239, 68, 68, 0.15)',
-                border: '1.5px solid rgba(239, 68, 68, 0.5)',
-                borderRadius: 10,
-                padding: '9px 12px',
-                color: '#FCA5A5',
-                fontSize: 12,
-                fontWeight: 700,
-                marginBottom: 14,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                animation: 'fadeIn 0.2s ease-out'
-              }}
-            >
-              <AlertTriangle size={15} color="#EF4444" style={{ flexShrink: 0 }} />
-              <span>{errorMessage}</span>
-            </div>
-          )}
-
-          {/* ===================== 1. PEOPLE LOGIN SECTION ===================== */}
-          {loginType === 'PEOPLE' && (
-            <form onSubmit={handlePeopleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
-              {/* Email Field */}
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 5, display: 'block' }}>
-                  Email
-                </label>
-                <div className="auth-input-container">
-                  <Mail size={15} color="#64748B" />
-                  <input
-                    type="text"
-                    value={peopleEmail}
-                    onChange={e => setPeopleEmail(e.target.value)}
-                    placeholder="Enter email address"
-                    className="auth-text-input"
-                  />
-                </div>
-              </div>
-
-              {/* Password Field */}
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 5, display: 'block' }}>
-                  Password
-                </label>
-                <div className="auth-input-container">
-                  <Lock size={15} color="#64748B" />
-                  <input
-                    type={showPeoplePassword ? 'text' : 'password'}
-                    value={peoplePassword}
-                    onChange={e => setPeoplePassword(e.target.value)}
-                    placeholder="Enter password"
-                    className="auth-text-input"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPeoplePassword(!showPeoplePassword)}
-                    className="auth-eye-btn"
-                    title={showPeoplePassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showPeoplePassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-              </div>
-
-              {/* LOGIN Button */}
-              <button type="submit" className="auth-primary-btn" style={{ marginTop: 4 }}>
-                LOGIN
-              </button>
-
-              {/* Action Buttons: CREATE ACCOUNT & FORGOT PASSWORD? */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 2, padding: '0 2px' }}>
-                <button
-                  type="button"
-                  onClick={() => setCurrentView('REGISTER')}
-                  className="auth-link-text"
-                  style={{ fontWeight: 800, color: '#38BDF8', fontSize: 12 }}
-                >
-                  CREATE ACCOUNT
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setCurrentView('FORGOT_PASSWORD')}
-                  className="auth-link-text"
-                  style={{ fontSize: 12, color: '#94A3B8' }}
-                >
-                  FORGOT PASSWORD?
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* ===================== 2. OFFICIAL LOGIN SECTION ===================== */}
-          {loginType === 'OFFICIAL' && (
-            <form onSubmit={handleOfficialLogin} style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
-              {/* Authorized Personnel Notice */}
+        {/* ===================== 1. PEOPLE LOGIN SECTION ===================== */}
+        {loginType === 'PEOPLE' && (
+          <form onSubmit={handlePeopleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5, display: 'block' }}>
+                Email Address
+              </label>
               <div
                 style={{
-                  background: 'rgba(2, 132, 199, 0.12)',
-                  border: '1px solid rgba(56, 189, 248, 0.35)',
-                  borderRadius: 10,
-                  padding: '8px 12px',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 8,
-                  color: '#7DD3FC',
-                  fontSize: 12,
-                  fontWeight: 700
+                  background: '#FFFFFF',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: 10,
+                  padding: '0 12px',
+                  height: 46
                 }}
               >
-                <Shield size={15} color="#38BDF8" style={{ flexShrink: 0 }} />
-                <span>Authorized personnel only</span>
+                <Mail size={16} color="#64748B" />
+                <input
+                  type="email"
+                  value={peopleEmail}
+                  onChange={e => setPeopleEmail(e.target.value)}
+                  placeholder="name@example.com"
+                  style={{
+                    flex: 1,
+                    background: 'transparent',
+                    border: 'none',
+                    padding: '0 10px',
+                    color: '#0F172A',
+                    fontSize: 13,
+                    outline: 'none',
+                    fontWeight: 600
+                  }}
+                />
               </div>
+            </div>
 
-              {/* Official ID Field */}
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 5, display: 'block' }}>
-                  Official ID
-                </label>
-                <div className="auth-input-container">
-                  <BadgeCheck size={15} color="#38BDF8" />
-                  <input
-                    type="text"
-                    value={officialId}
-                    onChange={e => setOfficialId(e.target.value)}
-                    placeholder="e.g. OFF-9014 or NDRF-01"
-                    className="auth-text-input"
-                  />
-                </div>
-              </div>
-
-              {/* Official Email Field */}
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 5, display: 'block' }}>
-                  Official Email
-                </label>
-                <div className="auth-input-container">
-                  <Mail size={15} color="#64748B" />
-                  <input
-                    type="text"
-                    value={officialEmail}
-                    onChange={e => setOfficialEmail(e.target.value)}
-                    placeholder="commander@lifeline.gov"
-                    className="auth-text-input"
-                  />
-                </div>
-              </div>
-
-              {/* Password Field */}
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', marginBottom: 5, display: 'block' }}>
-                  Password
-                </label>
-                <div className="auth-input-container">
-                  <Lock size={15} color="#64748B" />
-                  <input
-                    type={showOfficialPassword ? 'text' : 'password'}
-                    value={officialPassword}
-                    onChange={e => setOfficialPassword(e.target.value)}
-                    placeholder="Enter official password"
-                    className="auth-text-input"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowOfficialPassword(!showOfficialPassword)}
-                    className="auth-eye-btn"
-                    title={showOfficialPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showOfficialPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-              </div>
-
-              {/* OFFICIAL LOGIN Button */}
-              <button 
-                type="submit" 
-                className="auth-primary-btn"
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5, display: 'block' }}>
+                Password
+              </label>
+              <div
                 style={{
-                  marginTop: 4,
-                  background: 'linear-gradient(135deg, #0284C7, #0369A1)',
-                  boxShadow: '0 4px 18px rgba(2, 132, 199, 0.4)'
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: '#FFFFFF',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: 10,
+                  padding: '0 12px',
+                  height: 46
                 }}
               >
-                OFFICIAL LOGIN
-              </button>
-
-              {/* FORGOT PASSWORD? */}
-              <div style={{ textAlign: 'center', marginTop: 2 }}>
+                <Lock size={16} color="#64748B" />
+                <input
+                  type={showPeoplePassword ? 'text' : 'password'}
+                  value={peoplePassword}
+                  onChange={e => setPeoplePassword(e.target.value)}
+                  placeholder="Enter your password"
+                  style={{
+                    flex: 1,
+                    background: 'transparent',
+                    border: 'none',
+                    padding: '0 10px',
+                    color: '#0F172A',
+                    fontSize: 13,
+                    outline: 'none'
+                  }}
+                />
                 <button
                   type="button"
-                  onClick={() => setCurrentView('FORGOT_PASSWORD')}
-                  className="auth-link-text"
-                  style={{ fontSize: 12 }}
+                  onClick={() => setShowPeoplePassword(!showPeoplePassword)}
+                  style={{ background: 'transparent', border: 'none', color: '#64748B', cursor: 'pointer', padding: 4 }}
+                  title={showPeoplePassword ? 'Hide password' : 'Show password'}
                 >
-                  FORGOT PASSWORD?
+                  {showPeoplePassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
-            </form>
-          )}
+            </div>
 
-          {/* ===================== EMERGENCY ACCESS BUTTON ===================== */}
-          {/* Preserves immediate SOS access without requiring login */}
-          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
             <button
-              type="button"
-              onClick={handleEmergencySosAccess}
+              type="submit"
               style={{
-                width: '100%',
-                background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(185, 28, 28, 0.25) 100%)',
-                border: '1.5px solid rgba(239, 68, 68, 0.65)',
+                height: 48,
+                background: '#2563EB',
+                border: 'none',
                 borderRadius: 12,
-                padding: '11px 14px',
-                color: '#FCA5A5',
-                fontSize: 12,
-                fontWeight: 900,
-                letterSpacing: '0.5px',
+                color: '#FFFFFF',
+                fontWeight: 700,
+                fontSize: 14,
                 cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                transition: 'all 0.2s ease',
-                boxShadow: '0 4px 15px rgba(239, 68, 68, 0.18)'
+                boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
+                marginTop: 4
               }}
             >
-              <span>🚨</span>
-              <span>EMERGENCY OFFLINE SOS (NO LOGIN)</span>
+              {t('continueBtn')}
             </button>
-            <div style={{ fontSize: 10, color: '#64748B', textAlign: 'center', marginTop: 5 }}>
-              Immediate offline SOS transmission in critical danger
-            </div>
-          </div>
 
-          {/* Quick Demo Credentials for Reviewers */}
-          <div className="auth-quick-demo-box">
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
-              ⚡ 1-Click Demo Evaluation Login
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 2, padding: '0 2px' }}>
               <button
                 type="button"
-                onClick={quickLoginVictim}
-                className="auth-demo-btn victim"
-                title="Log in as citizen (People)"
+                onClick={() => setCurrentView('REGISTER')}
+                style={{ background: 'transparent', border: 'none', color: '#2563EB', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
               >
-                Citizen (People)
+                Create Account
               </button>
+
               <button
                 type="button"
-                onClick={quickLoginOfficial}
-                className="auth-demo-btn rescue"
-                title="Log in as official (OFF-9014)"
+                onClick={() => setCurrentView('FORGOT_PASSWORD')}
+                style={{ background: 'transparent', border: 'none', color: '#64748B', fontSize: 12, cursor: 'pointer' }}
               >
-                Official (Rescue HQ)
+                Forgot Password?
               </button>
             </div>
+          </form>
+        )}
+
+        {/* ===================== 2. OFFICIAL LOGIN SECTION ===================== */}
+        {loginType === 'OFFICIAL' && (
+          <form onSubmit={handleOfficialLogin} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div
+              style={{
+                background: '#EFF6FF',
+                border: '1px solid #BFDBFE',
+                borderRadius: 10,
+                padding: '8px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                color: '#1D4ED8',
+                fontSize: 12,
+                fontWeight: 700
+              }}
+            >
+              <Shield size={16} color="#2563EB" style={{ flexShrink: 0 }} />
+              <span>Authorized personnel only</span>
+            </div>
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5, display: 'block' }}>
+                Official ID
+              </label>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: '#FFFFFF',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: 10,
+                  padding: '0 12px',
+                  height: 46
+                }}
+              >
+                <BadgeCheck size={16} color="#2563EB" />
+                <input
+                  type="text"
+                  value={officialId}
+                  onChange={e => setOfficialId(e.target.value)}
+                  placeholder="e.g. OFF-9014 or NDRF-01"
+                  style={{
+                    flex: 1,
+                    background: 'transparent',
+                    border: 'none',
+                    padding: '0 10px',
+                    color: '#0F172A',
+                    fontSize: 13,
+                    outline: 'none',
+                    fontWeight: 600
+                  }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5, display: 'block' }}>
+                Official Email
+              </label>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: '#FFFFFF',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: 10,
+                  padding: '0 12px',
+                  height: 46
+                }}
+              >
+                <Mail size={16} color="#64748B" />
+                <input
+                  type="email"
+                  value={officialEmail}
+                  onChange={e => setOfficialEmail(e.target.value)}
+                  placeholder="commander@lifeline.gov"
+                  style={{
+                    flex: 1,
+                    background: 'transparent',
+                    border: 'none',
+                    padding: '0 10px',
+                    color: '#0F172A',
+                    fontSize: 13,
+                    outline: 'none',
+                    fontWeight: 600
+                  }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5, display: 'block' }}>
+                Password
+              </label>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: '#FFFFFF',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: 10,
+                  padding: '0 12px',
+                  height: 46
+                }}
+              >
+                <Lock size={16} color="#64748B" />
+                <input
+                  type={showOfficialPassword ? 'text' : 'password'}
+                  value={officialPassword}
+                  onChange={e => setOfficialPassword(e.target.value)}
+                  placeholder="Enter official password"
+                  style={{
+                    flex: 1,
+                    background: 'transparent',
+                    border: 'none',
+                    padding: '0 10px',
+                    color: '#0F172A',
+                    fontSize: 13,
+                    outline: 'none'
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowOfficialPassword(!showOfficialPassword)}
+                  style={{ background: 'transparent', border: 'none', color: '#64748B', cursor: 'pointer', padding: 4 }}
+                  title={showOfficialPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showOfficialPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              style={{
+                height: 48,
+                background: '#0284C7',
+                border: 'none',
+                borderRadius: 12,
+                color: '#FFFFFF',
+                fontWeight: 700,
+                fontSize: 14,
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(2, 132, 199, 0.25)',
+                marginTop: 4
+              }}
+            >
+              OFFICIAL LOGIN
+            </button>
+
+            <div style={{ textAlign: 'center', marginTop: 2 }}>
+              <button
+                type="button"
+                onClick={() => setCurrentView('FORGOT_PASSWORD')}
+                style={{ background: 'transparent', border: 'none', color: '#64748B', fontSize: 12, cursor: 'pointer' }}
+              >
+                Forgot Password?
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* ===================== EMERGENCY ACCESS BUTTON ===================== */}
+        <div style={{ marginTop: 12, paddingTop: 14, borderTop: '1px solid #E2E8F0' }}>
+          <button
+            type="button"
+            onClick={handleEmergencySosAccess}
+            style={{
+              width: '100%',
+              background: '#DC2626',
+              border: 'none',
+              borderRadius: 12,
+              padding: '12px 14px',
+              color: '#FFFFFF',
+              fontSize: 13,
+              fontWeight: 800,
+              letterSpacing: '0.3px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              boxShadow: '0 4px 12px rgba(220, 38, 38, 0.25)',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <AlertCircle size={18} />
+            <span>EMERGENCY OFFLINE SOS (NO LOGIN)</span>
+          </button>
+          <div style={{ fontSize: 11, color: '#64748B', textAlign: 'center', marginTop: 6 }}>
+            Immediate offline SOS transmission in critical danger
+          </div>
+        </div>
+
+        {/* Quick Demo Credentials */}
+        <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textAlign: 'center', textTransform: 'uppercase' }}>
+            ⚡ 1-Click Evaluation Demo Access
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+            <button
+              type="button"
+              onClick={quickLoginVictim}
+              style={{
+                height: 38,
+                background: '#F1F5F9',
+                border: '1px solid #CBD5E1',
+                borderRadius: 10,
+                fontSize: 12,
+                fontWeight: 700,
+                color: '#0F172A',
+                cursor: 'pointer'
+              }}
+            >
+              Citizen (Civilian)
+            </button>
+            <button
+              type="button"
+              onClick={quickLoginOfficial}
+              style={{
+                height: 38,
+                background: '#EFF6FF',
+                border: '1px solid #BFDBFE',
+                borderRadius: 10,
+                fontSize: 12,
+                fontWeight: 700,
+                color: '#2563EB',
+                cursor: 'pointer'
+              }}
+            >
+              Official (Rescue HQ)
+            </button>
           </div>
         </div>
       </div>

@@ -1,29 +1,23 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { HardwareStatusStrip } from '../common/HardwareStatusStrip';
-import { Radio, Smartphone, RefreshCw, ArrowDown, ShieldCheck, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Radio, ArrowLeft, RefreshCw } from 'lucide-react';
 
 interface Props {
   onBack?: () => void;
 }
 
 export const MeshRadar: React.FC<Props> = ({ onBack }) => {
-  const { meshNodes, location, meshStatus, user, simpleNetworkStatus, toggleSimulateNodeRange, victimActiveSos, realPeerIds, isNative } = useApp();
+  const { meshNodes, meshStatus, user, toggleSimulateNodeRange, realPeerIds, isNative, t } = useApp();
   const [isNodeInRange, setIsNodeInRange] = useState(true);
 
-  // REAL BLE MODE is detected purely from live BLE state: a non-empty
-  // realPeerIds means physically connected peers exist right now.
-  // Mock/demo mode keeps realPeerIds empty and uses the demo view below.
   const isBleMode = realPeerIds.length > 0;
 
-  // Toggle simulate Person C entering/leaving range
   const handleToggleRange = () => {
     const res = toggleSimulateNodeRange();
     setIsNodeInRange(res);
   };
 
-  // REAL BLE peer cards: actual connected peer IDs only. Unknown fields
-  // stay neutral (N/A) — never invented coordinates/battery/distance.
   const realHops = [
     {
       id: 'LOCAL-DEVICE',
@@ -33,7 +27,7 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
       dist: '0.0 km',
       inRange: true
     },
-    ...realPeerIds.map(peerId => ({
+    ...realPeerIds.map((peerId) => ({
       id: peerId,
       title: peerId,
       sub: 'BLE peer • connected',
@@ -43,8 +37,7 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
     }))
   ];
 
-  // Demo view (unchanged): PERSON A -> B -> C -> D -> RESCUE CENTER chain.
-  const hops = [
+  const demoHops = [
     {
       id: 'PERSON_A',
       title: 'PERSON A',
@@ -78,236 +71,147 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
       inRange: meshNodes[2]?.isConnected ?? true
     },
     {
-      id: 'NODE-RESCUE-CMD',
-      title: 'RESCUE CENTER',
-      sub: 'Tactical HQ Gateway',
-      status: 'DESTINATION',
-      dist: `${meshNodes[3]?.distanceToVictimKm || 2.4} km`,
-      inRange: meshNodes[3]?.isConnected ?? true
+      id: 'HQ',
+      title: 'RESCUE CENTER (HQ)',
+      sub: 'Command HQ Base',
+      status: 'GATEWAY',
+      dist: '2.1 km',
+      inRange: true
     }
   ];
 
   // Truthful runtime peer list:
-  // In native Android runtime, ONLY show real BLE peers. If no peers are in range,
-  // show this device and indicate 'No connected peers'.
-  // In browser/demo mode, show the multi-hop demonstration chain (hops).
-  const displayHops = isNative ? realHops : (isBleMode ? realHops : hops);
+  // In native Android runtime, ONLY show real BLE peers.
+  // In browser/demo mode, show the multi-hop demonstration chain.
+  const activeHops = isNative ? realHops : (isBleMode ? realHops : demoHops);
 
   return (
-    <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* Header with back option if requested */}
+    <div style={{ padding: '16px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Top Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {onBack && (
-              <button
-                onClick={onBack}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#38BDF8',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  marginRight: 4
-                }}
-              >
-                ← Back
-              </button>
-            )}
-            <h2 style={{ fontSize: 18, fontWeight: 900, color: '#FFF' }}>📡 MESH NETWORK TOPOLOGY</h2>
-            <span style={{
-              fontSize: 10,
-              fontWeight: 800,
-              padding: '2px 8px',
-              borderRadius: 6,
-              marginLeft: 6,
-              background: isNative ? 'rgba(56, 189, 248, 0.15)' : 'rgba(148, 163, 184, 0.15)',
-              color: isNative ? '#38BDF8' : '#94A3B8',
-              border: `1px solid ${isNative ? 'rgba(56, 189, 248, 0.4)' : 'rgba(148, 163, 184, 0.4)'}`
-            }}>
-              {isNative ? 'MODE: HARDWARE BLE MESH' : 'MODE: BROWSER SIMULATOR'}
-            </span>
-          </div>
-          <span style={{ fontSize: 11, color: '#94A3B8' }}>{isBleMode ? 'Live BLE connections (stable peer IDs)' : 'Offline Multi-Hop Autonomous Relay (A → B → C → D → Rescue)'}</span>
+        {onBack ? (
+          <button
+            onClick={onBack}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#2563EB',
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4
+            }}
+          >
+            <ArrowLeft size={16} />
+            <span>Back</span>
+          </button>
+        ) : <div />}
+
+        <div style={{ fontWeight: 800, fontSize: 16, color: '#0F172A' }}>
+          {t('radarHeader')}
         </div>
+        <div style={{ width: 40 }} />
       </div>
 
       <HardwareStatusStrip />
 
-      {/* Primary Simple Network Status Banner */}
-      <div style={{
-        background: 'rgba(0, 0, 0, 0.45)',
-        border: '1px solid var(--border-card-highlight)',
-        borderRadius: 14,
-        padding: '12px 14px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 6
-      }}>
-        <div style={{ fontSize: 10, fontWeight: 800, color: '#94A3B8', letterSpacing: 1 }}>
-          📡 NETWORK STATUS
-        </div>
-
-        <div style={{ fontSize: 15, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 8 }}>
-          {simpleNetworkStatus === 'CONNECTED' && (
-            <span style={{ color: '#10B981', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span className="status-dot active"></span> 🟢 CONNECTED
+      {/* Network Overview Card */}
+      <div
+        style={{
+          background: '#FFFFFF',
+          border: '1px solid #E2E8F0',
+          borderRadius: 16,
+          padding: 16,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+          boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Radio size={20} color="#16A34A" />
+            <span style={{ fontSize: 15, fontWeight: 800, color: '#0F172A' }}>
+              {t('connectedPeers')}: {Math.max(0, activeHops.length - 1)} Nodes
             </span>
-          )}
-          {simpleNetworkStatus === 'SEARCHING' && (
-            <span style={{ color: '#F59E0B', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span className="status-dot searching"></span> 🟡 SEARCHING FOR NEARBY DEVICE...
-            </span>
-          )}
-          {simpleNetworkStatus === 'WAITING_RELAY' && (
-            <span style={{ color: '#F59E0B', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span className="status-dot searching"></span> ⏳ WAITING FOR RELAY...
-            </span>
-          )}
-          {simpleNetworkStatus === 'FORWARDED' && (
-            <span style={{ color: '#10B981', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span className="status-dot active"></span> 🟢 SOS FORWARDED
-            </span>
-          )}
-          {simpleNetworkStatus === 'DELIVERED' && (
-            <span style={{ color: '#38BDF8', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <CheckCircle2 size={16} color="#38BDF8" /> ✓ RESCUE CENTER REACHED
-            </span>
-          )}
-        </div>
-
-        <div style={{ fontSize: 11, color: '#94A3B8' }}>
-          {simpleNetworkStatus === 'WAITING_RELAY'
-            ? 'Store-Carry-Forward active: Packet is securely held on relay device until the next node enters 1.0 km range.'
-            : 'Multi-hop packets forward automatically through in-range nodes without any manual selection.'}
-        </div>
-      </div>
-
-      {/* Multi-Hop Relay Chain Diagram (A -> B -> C -> D -> Rescue) */}
-      <div style={{
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border-card)',
-        borderRadius: 14,
-        padding: '12px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 8
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase' }}>
-            Multi-Hop Transmission Path:
           </div>
-          <span style={{ fontSize: 10, color: '#10B981', fontWeight: 700 }}>
-            Automated Routing
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#16A34A', background: '#F0FDF4', padding: '3px 8px', borderRadius: 8 }}>
+            {meshStatus}
           </span>
         </div>
+        <p style={{ fontSize: 12, color: '#64748B' }}>
+          {t('radarSubtitle')} (Bluetooth Low Energy Store-Carry-Forward)
+        </p>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {displayHops.map((hop, idx) => (
-            <React.Fragment key={hop.id}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                background: hop.inRange ? 'rgba(255,255,255,0.04)' : 'rgba(239,68,68,0.08)',
-                border: `1px solid ${hop.inRange ? 'var(--border-card)' : 'rgba(239,68,68,0.3)'}`,
-                borderRadius: 10,
-                padding: '8px 10px'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: '50%',
-                    background: idx === 0 ? '#EF4444' : idx === displayHops.length - 1 ? '#0284C7' : '#334155',
-                    color: '#FFF',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 10,
-                    fontWeight: 800
-                  }}>
-                    {idx === 0 ? '●' : (isNative || isBleMode) ? `${idx}` : idx === 1 ? 'B' : idx === 2 ? 'C' : idx === 3 ? 'D' : 'HQ'}
-                  </div>
-
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: 12, color: '#FFF' }}>
-                      {hop.title}
-                    </div>
-                    <div style={{ fontSize: 10, color: '#94A3B8' }}>
-                      {hop.sub} • {hop.dist}
-                    </div>
-                  </div>
-                </div>
-
-                <span style={{
-                  fontSize: 10,
-                  fontWeight: 800,
-                  padding: '2px 8px',
-                  borderRadius: 6,
-                  background: hop.inRange ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                  color: hop.inRange ? '#10B981' : '#EF4444',
-                  border: `1px solid ${hop.inRange ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`
-                }}>
-                  {hop.inRange ? '🟢 IN RANGE' : '🔴 OUT OF RANGE'}
-                </span>
-              </div>
-
-              {idx < displayHops.length - 1 && (
-                <div style={{ display: 'flex', justifyContent: 'center', margin: '-2px 0' }}>
-                  <div style={{
-                    width: 2,
-                    height: 12,
-                    background: hop.inRange ? '#10B981' : '#64748B'
-                  }} />
-                </div>
-              )}
-            </React.Fragment>
-          ))}
-
-          {isNative && realPeerIds.length === 0 && (
-            <div style={{
-              background: 'rgba(245, 158, 11, 0.08)',
-              border: '1px dashed rgba(245, 158, 11, 0.3)',
+        {!isNative && !isBleMode && (
+          <button
+            onClick={handleToggleRange}
+            style={{
+              marginTop: 6,
+              height: 38,
+              background: '#F1F5F9',
+              border: '1px solid #CBD5E1',
               borderRadius: 10,
-              padding: '12px',
-              textAlign: 'center',
-              marginTop: 4
-            }}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: '#F59E0B' }}>
-                📡 NO PEERS CURRENTLY IN RANGE
-              </div>
-              <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
-                Scanning for nearby LIFELINE BLE devices. Packets will be stored and carried until a peer connects.
-              </div>
-            </div>
-          )}
-        </div>
+              fontSize: 12,
+              fontWeight: 700,
+              color: '#0F172A',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6
+            }}
+          >
+            <RefreshCw size={13} />
+            <span>Simulate Peer Range: {isNodeInRange ? 'Person C in range' : 'Person C out of range'}</span>
+          </button>
+        )}
       </div>
 
-      {/* Interactive Radar Visualizer */}
+      {/* In Native Mode with 0 real peers: informative notice */}
+      {isNative && realPeerIds.length === 0 && (
+        <div style={{
+          background: '#FFFBEB',
+          border: '1px solid #FDE68A',
+          borderRadius: 12,
+          padding: '12px',
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: '#D97706' }}>
+            📡 NO PEERS CURRENTLY IN RANGE
+          </div>
+          <div style={{ fontSize: 11, color: '#92400E', marginTop: 3 }}>
+            Scanning for nearby LIFELINE BLE devices. Packets will be stored and carried until a peer connects.
+          </div>
+        </div>
+      )}
+
+      {/* Interactive Clean Radar Visualizer */}
       <div style={{
-        background: '#090D16',
-        border: '1px solid var(--border-card)',
+        background: '#FFFFFF',
+        border: '1px solid #E2E8F0',
         borderRadius: 16,
-        padding: '14px',
+        padding: '16px',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         position: 'relative',
-        minHeight: 200
+        minHeight: 210,
+        boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
+        overflow: 'hidden'
       }}>
-        {/* Radar Rings */}
+        {/* Radar concentric rings */}
         <div style={{
           position: 'absolute',
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
-          width: 160,
-          height: 160,
+          width: 170,
+          height: 170,
           borderRadius: '50%',
-          border: '1px dashed rgba(56, 189, 248, 0.2)',
+          border: '1.5px dashed #CBD5E1',
           pointerEvents: 'none'
         }} />
         <div style={{
@@ -315,40 +219,39 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
-          width: 90,
-          height: 90,
+          width: 100,
+          height: 100,
           borderRadius: '50%',
-          border: '1px solid rgba(16, 185, 129, 0.2)',
+          border: '1.5px solid #E2E8F0',
           pointerEvents: 'none'
         }} />
 
-        {/* Center: Person A */}
+        {/* Center Node (YOU) */}
         <div style={{
           position: 'absolute',
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
-          background: '#EF4444',
+          background: '#DC2626',
           color: '#FFF',
-          padding: '4px 8px',
-          borderRadius: 16,
-          fontSize: 10,
+          padding: '5px 10px',
+          borderRadius: 14,
+          fontSize: 11,
           fontWeight: 800,
-          boxShadow: '0 0 14px rgba(239,68,68,0.8)',
+          boxShadow: '0 2px 8px rgba(220, 38, 38, 0.3)',
           zIndex: 3
         }}>
-          {isBleMode ? 'YOU' : 'PERSON A (YOU)'}
+          {isBleMode || isNative ? 'YOU' : 'YOU (SOURCE)'}
         </div>
 
-        {/* Floating Relay Nodes: in native mode or BLE mode, render ONLY real BLE peers (no fake nodes).
-            In browser demo mode, render demo meshNodes (Person B, C, D, HQ). */}
+        {/* Floating Relay Nodes */}
         {(isNative || isBleMode)
           ? realPeerIds.map((peerId, idx) => {
               const angle = (idx / realPeerIds.length) * 2 * Math.PI - Math.PI / 2;
-              const radius = 64;
+              const radius = 68;
               const x = Math.cos(angle) * radius;
               const y = Math.sin(angle) * radius;
-              const label = peerId.length > 12 ? `${peerId.slice(0, 8)}…` : peerId;
+              const label = peerId.length > 10 ? `${peerId.slice(0, 8)}…` : peerId;
               return (
                 <div
                   key={peerId}
@@ -357,13 +260,13 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
                     top: `calc(50% + ${y}px)`,
                     left: `calc(50% + ${x}px)`,
                     transform: 'translate(-50%, -50%)',
-                    background: 'rgba(16, 185, 129, 0.9)',
+                    background: '#16A34A',
                     color: '#FFF',
-                    padding: '3px 7px',
+                    padding: '3px 8px',
                     borderRadius: 10,
-                    fontSize: 9,
+                    fontSize: 10,
                     fontWeight: 800,
-                    boxShadow: '0 0 10px rgba(16, 185, 129, 0.6)',
+                    boxShadow: '0 2px 6px rgba(22, 163, 74, 0.3)',
                     zIndex: 2,
                     whiteSpace: 'nowrap'
                   }}
@@ -373,83 +276,92 @@ export const MeshRadar: React.FC<Props> = ({ onBack }) => {
               );
             })
           : meshNodes.map((n, idx) => {
-          const angle = (idx / meshNodes.length) * 2 * Math.PI - Math.PI / 2;
-          const radius = n.isConnected ? 58 : 86;
-          const x = Math.cos(angle) * radius;
-          const y = Math.sin(angle) * radius;
+              const angle = (idx / meshNodes.length) * 2 * Math.PI - Math.PI / 2;
+              const radius = n.isConnected ? 58 : 82;
+              const x = Math.cos(angle) * radius;
+              const y = Math.sin(angle) * radius;
 
-          return (
-            <div
-              key={n.id}
-              style={{
-                position: 'absolute',
-                top: `calc(50% + ${y}px)`,
-                left: `calc(50% + ${x}px)`,
-                transform: 'translate(-50%, -50%)',
-                background: n.isConnected ? 'rgba(16, 185, 129, 0.9)' : 'rgba(239, 68, 68, 0.85)',
-                color: '#FFF',
-                padding: '3px 7px',
-                borderRadius: 10,
-                fontSize: 9,
-                fontWeight: 800,
-                boxShadow: n.isConnected ? '0 0 10px rgba(16, 185, 129, 0.6)' : 'none',
-                zIndex: 2,
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {n.type === 'RESCUE_GATEWAY' ? '🚨 RESCUE HQ' : n.name.split(' ')[0]} ({n.distanceToVictimKm}km)
+              return (
+                <div
+                  key={n.id}
+                  style={{
+                    position: 'absolute',
+                    top: `calc(50% + ${y}px)`,
+                    left: `calc(50% + ${x}px)`,
+                    transform: 'translate(-50%, -50%)',
+                    background: n.isConnected ? '#16A34A' : '#DC2626',
+                    color: '#FFF',
+                    padding: '3px 8px',
+                    borderRadius: 10,
+                    fontSize: 10,
+                    fontWeight: 800,
+                    boxShadow: n.isConnected ? '0 2px 6px rgba(22, 163, 74, 0.25)' : 'none',
+                    zIndex: 2,
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {n.type === 'RESCUE_GATEWAY' ? '🚨 RESCUE HQ' : n.name.split(' ')[0]} ({n.distanceToVictimKm}km)
+                </div>
+              );
+            })}
+
+        <div style={{ marginTop: 'auto', paddingTop: 160, fontSize: 11, color: '#64748B', textAlign: 'center' }}>
+          {isBleMode || isNative ? 'Live BLE direct radio peers' : 'Direct connection range: ~1.0 km'}
+        </div>
+      </div>
+
+      {/* Node Chain List */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0F172A' }}>
+          Active Mesh Topology Chain:
+        </h3>
+
+        {activeHops.map((hop, idx) => (
+          <div
+            key={idx}
+            style={{
+              background: '#FFFFFF',
+              border: `1px solid ${hop.inRange ? '#E2E8F0' : '#FECACA'}`,
+              borderRadius: 14,
+              padding: '12px 14px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  background: hop.status === 'SOURCE' ? '#EFF6FF' : hop.inRange ? '#F0FDF4' : '#FEF2F2',
+                  color: hop.status === 'SOURCE' ? '#2563EB' : hop.inRange ? '#16A34A' : '#DC2626',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 800,
+                  fontSize: 13
+                }}
+              >
+                {idx + 1}
+              </div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>{hop.title}</div>
+                <div style={{ fontSize: 12, color: '#64748B' }}>{hop.sub}</div>
+              </div>
             </div>
-          );
-        })}
 
-        <div style={{ marginTop: 'auto', paddingTop: 130, fontSize: 10, color: '#64748B', textAlign: 'center' }}>
-          {isBleMode ? 'Live BLE peers (physical radio range varies)' : 'Configured direct connection range: 1.0 km'}
-        </div>
-      </div>
-
-      {/* Interactive Range Simulator Trigger (browser demo only: strictly hidden in native mode) */}
-      {!isNative && !isBleMode && (
-      <div style={{
-        background: 'rgba(56, 189, 248, 0.08)',
-        border: '1px solid rgba(56, 189, 248, 0.25)',
-        borderRadius: 12,
-        padding: '12px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 8
-      }}>
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 800, color: '#FFF' }}>
-            {isNative ? '[SIMULATION TEST CONTROLS] Simulate Movement & Store-Carry-Forward' : 'Simulate Movement & Store-Carry-Forward'}
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#0F172A' }}>{hop.dist}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: hop.inRange ? '#16A34A' : '#DC2626' }}>
+                {hop.inRange ? 'CONNECTED' : 'DISCONNECTED'}
+              </div>
+            </div>
           </div>
-          <div style={{ fontSize: 10, color: '#94A3B8' }}>
-            Move Person C out of range to test "WAITING FOR RELAY...", then bring back into range to auto-forward.
-          </div>
-        </div>
-
-        <button
-          onClick={handleToggleRange}
-          style={{
-            background: 'linear-gradient(135deg, #0284C7, #0369A1)',
-            border: 'none',
-            color: '#FFF',
-            fontSize: 11,
-            fontWeight: 800,
-            padding: '8px 12px',
-            borderRadius: 8,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            flexShrink: 0
-          }}
-        >
-          <RefreshCw size={12} />
-          Toggle Range
-        </button>
+        ))}
       </div>
-      )}
     </div>
   );
 };
