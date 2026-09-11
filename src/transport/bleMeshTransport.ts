@@ -168,13 +168,20 @@ export class BleMeshTransport implements MeshTransport {
         console.log('[BLE-DIAG] scanning started=false');
         return false;
       }
+      // Advertising is best-effort: a missing advertiser (unsupported
+      // chipset, transient stack failure) must NOT kill scanning — the
+      // phone can still discover and connect as a central (scan-only mode).
+      let advertising = false;
       try {
-        await this.bridge.startAdvertising();
-        this.diagAdvertising = true;
-        console.log('[BLE-DIAG] advertising started=true');
+        const adResult = await this.bridge.startAdvertising();
+        advertising = adResult != null && adResult.started !== false;
       } catch {
-        console.log('[BLE-DIAG] advertising started=false');
-        return false;
+        advertising = false;
+      }
+      this.diagAdvertising = advertising;
+      console.log(`[BLE-DIAG] advertising started=${advertising}`);
+      if (!advertising) {
+        console.log('[BLE-DIAG] continuing in scan-only mode');
       }
       this.started = true;
       // DIAG-LOG: temporary physical-test aid (remove after field verification).

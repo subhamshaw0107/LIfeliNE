@@ -42,6 +42,8 @@ class BleMeshPlugin : Plugin() {
             payload.put("peerId", peerId)
             // Base64 NO_WRAP: single-line string safe for the JS bridge.
             payload.put("data", Base64.encodeToString(data, Base64.NO_WRAP))
+            // DIAG-LOG: temporary physical-test aid (remove after field verification).
+            Log.i(TAG, "DIAG packetReceived emitted: peer=$peerId bytes=${data.size}")
             emit(BleConstants.EVENT_PACKET, payload)
         }
 

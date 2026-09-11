@@ -129,6 +129,9 @@ class BleMeshManager(
         var serverConnected: Boolean = false
         var writeQueue: ArrayDeque<ByteArray> = ArrayDeque()
         var writing: Boolean = false
+        // PEER_ID read deferred until the TX CCCD write completes, so only
+        // one GATT operation is ever in flight (Android serializes poorly).
+        var pendingIdRead: BluetoothGattCharacteristic? = null
         /** Server-side buffer, keyed migration to stable id on IDENTIFY. */
         val reassembler = BleReassembler()
         var sawFirstRxMessage: Boolean = false
@@ -412,6 +415,8 @@ class BleMeshManager(
             if (server?.addService(service) == true) {
                 gattServer = server
                 txCharacteristic = tx
+                // DIAG-LOG: temporary physical-test aid (remove after field verification).
+                Log.i(TAG, "DIAG GATT server started")
             } else {
                 server?.close()
             }
@@ -464,6 +469,8 @@ class BleMeshManager(
                 gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, null)
             }
             if (characteristic.uuid == BleConstants.RX_CHARACTERISTIC_UUID) {
+                // DIAG-LOG: temporary physical-test aid (remove after field verification).
+                Log.i(TAG, "DIAG characteristic write received: ${value.size} bytes from ${device.address}")
                 handleServerRx(device.address, value)
             }
         }
@@ -533,6 +540,8 @@ class BleMeshManager(
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             val address = gatt.device?.address ?: return
             if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
+                // DIAG-LOG: temporary physical-test aid (remove after field verification).
+                Log.i(TAG, "DIAG GATT connected: ${gatt.device?.address}")
                 try {
                     gatt.requestMtu(BleConstants.PREFERRED_MTU)
                 } catch (e: Exception) {
@@ -553,12 +562,19 @@ class BleMeshManager(
         override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 links[gatt.device?.address]?.let { it.mtu = mtu }
+                // DIAG-LOG: temporary physical-test aid (remove after field verification).
+                Log.i(TAG, "DIAG MTU negotiated: $mtu on ${gatt.device?.address}")
+            } else {
+                // DIAG-LOG: temporary physical-test aid (remove after field verification).
+                Log.w(TAG, "DIAG MTU request failed status=$status on ${gatt.device?.address}; using default")
             }
             gatt.discoverServices() // discover only after MTU settles
         }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
             if (status != BluetoothGatt.GATT_SUCCESS) return
+            // DIAG-LOG: temporary physical-test aid (remove after field verification).
+            Log.i(TAG, "DIAG services discovered on ${gatt.device?.address}")
             val address = gatt.device?.address ?: return
             val link = links[address] ?: return
             val service = gatt.getService(BleConstants.SERVICE_UUID) ?: run {
@@ -573,15 +589,54 @@ class BleMeshManager(
                 return
             }
             // Subscribe to TX notifications, then read the stable peer id.
+            // The PEER_ID read is deferred until onDescriptorWrite confirms
+            // the CCCD write: Android allows a single outstanding GATT
+            // operation, and overlapping them collides silently.
             gatt.setCharacteristicNotification(tx, true)
             val cccd = tx.getDescriptor(BleConstants.CCC_DESCRIPTOR_UUID)
-            if (cccd != null) {
-                writeDescriptorCompat(gatt, cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
-            }
             val idChar = service.getCharacteristic(BleConstants.PEER_ID_CHARACTERISTIC_UUID)
-            if (idChar != null) {
+            if (cccd != null && idChar != null) {
+                link.pendingIdRead = idChar
+                writeDescriptorCompat(gatt, cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+            } else if (idChar != null) {
+                // No CCCD to configure: fall back to an immediate read.
+                // DIAG-LOG: temporary physical-test aid (remove after field verification).
+                Log.i(TAG, "DIAG no TX CCCD on ${link.address}; reading PEER_ID directly")
                 gatt.readCharacteristic(idChar)
+            } else {
+                // DIAG-LOG: temporary physical-test aid (remove after field verification).
+                Log.w(TAG, "DIAG missing PEER_ID characteristic on ${link.address}; link unusable")
+                gatt.disconnect()
             }
+        }
+
+        override fun onDescriptorWrite(
+            gatt: BluetoothGatt?,
+            descriptor: BluetoothGattDescriptor?,
+            status: Int
+        ) {
+            // DIAG-LOG: temporary physical-test aid (remove after field verification).
+            Log.i(TAG, "DIAG descriptor write: uuid=${descriptor?.uuid} status=$status")
+            if (gatt == null || descriptor == null) return
+            // Only our own TX CCCD may trigger the deferred PEER_ID read.
+            if (descriptor.uuid != BleConstants.CCC_DESCRIPTOR_UUID) return
+            if (descriptor.characteristic?.uuid != BleConstants.TX_CHARACTERISTIC_UUID) return
+            val address = gatt.device?.address ?: return
+            val link = links[address] ?: return
+            val idChar = link.pendingIdRead
+            link.pendingIdRead = null
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                // DIAG-LOG: temporary physical-test aid (remove after field verification).
+                Log.w(TAG, "DIAG CCCD write failed on $address status=$status; dropping link for clean retry")
+                try {
+                    gatt.disconnect()
+                } catch (e: Exception) {
+                    Log.w(TAG, "disconnect after CCCD failure: ${e.message}")
+                }
+                return
+            }
+            if (idChar == null) return
+            gatt.readCharacteristic(idChar)
         }
 
         override fun onCharacteristicRead(
@@ -628,6 +683,9 @@ class BleMeshManager(
             link.writing = false
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 Log.w(TAG, "write failed status=$status, retrying once")
+            } else {
+                // DIAG-LOG: temporary physical-test aid (remove after field verification).
+                Log.i(TAG, "DIAG native write success on $address")
             }
             pumpWriteQueue(link)
         }

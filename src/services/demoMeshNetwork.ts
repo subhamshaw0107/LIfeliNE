@@ -76,7 +76,7 @@ const STAGE_STATUS: Record<DemoMeshStage, SimpleNetworkStatus | null> = {
   WAITING_RELAY: 'WAITING_RELAY',
 };
 
-class DemoMeshNetwork {
+export class DemoMeshNetwork {
   /**
    * This device's radio link (M2). Starts as mock so browser/demo/tests
    * work everywhere; upgraded to real BLE on capable Android devices
@@ -108,6 +108,23 @@ class DemoMeshNetwork {
   private realPeerIds: string[] = [];
   private realPeerListeners: Array<(peerIds: string[]) => void> = [];
   private realPeersUnsub: (() => void) | null = null;
+  // In-flight native BLE upgrade, tracked so sendSos() can wait for it to
+  // settle instead of racing the mock transport at startup. Never rejects.
+  private bleUpgrade: Promise<boolean> | null = null;
+  // Upper bound for waiting on BLE readiness inside sendSos(): SOS creation
+  // must never block on radio bring-up; held packets flush on connection.
+  private static readonly BLE_READY_WAIT_MS = 2000;
+  // Bounded upgrade retry: one in-flight attempt at a time, exponential
+  // backoff, hard attempt cap. Retried on timer and on app-foreground
+  // return (user may have granted permissions or toggled Bluetooth while
+  // away). A successful upgrade stops all retries permanently.
+  private bleUpgradeInFlight: Promise<boolean> | null = null;
+  private bleRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private bleRetryAttempt = 0;
+  private foregroundRetryAttached = false;
+  private static readonly BLE_RETRY_BASE_MS = 10000;
+  private static readonly BLE_RETRY_MAX_MS = 5 * 60 * 1000;
+  private static readonly BLE_RETRY_MAX_ATTEMPTS = 8;
 
   constructor() {
     // This device owns one transport; virtual peers own theirs.
@@ -126,7 +143,10 @@ class DemoMeshNetwork {
     this.watchRealPeers();
     // Opportunistic radio upgrade: real BLE on capable Android, mock
     // everywhere else (no-op there). Virtual peers are untouched.
-    void this.enableNativeBle();
+    // Tracked (not bare void) so sendSos() can await its settlement.
+    // Rejection-proofed: an upgrade failure must never break SOS sends.
+    this.bleUpgrade = this.enableNativeBle().then(ok => ok, () => false);
+    this.attachForegroundRetry();
 
     // Virtual peers are stand-ins for other people's phones: isolated stores
     // cleared on boot so demo relays never leak state between sessions.
@@ -176,8 +196,19 @@ class DemoMeshNetwork {
   /**
    * Send a locally created SOS through the M3 pipeline and onto the mesh.
    * Full path: validate → dedup → TTL → triage → store → forward via M2.
+   *
+   * Waits (bounded) for a still-pending native BLE upgrade first, so an
+   * SOS pressed at startup goes to the real radio instead of racing the
+   * mock. Never blocks longer than BLE_READY_WAIT_MS; unready radio just
+   * means SCF hold + flush on later connection.
    */
   async sendSos(packet: SosPacket): Promise<boolean> {
+    if (this.bleUpgrade) {
+      await Promise.race([
+        this.bleUpgrade,
+        new Promise(resolve => setTimeout(resolve, DemoMeshNetwork.BLE_READY_WAIT_MS)),
+      ]);
+    }
     return this.selfEngine.processPacket(packet);
   }
 
@@ -261,25 +292,111 @@ class DemoMeshNetwork {
    * tests, and when BLE/permission is unavailable. Test seam: inject env.
    */
   async enableNativeBle(env?: BleEnvironment): Promise<boolean> {
-    const upgraded = await upgradeToBleIfAvailable(
-      this.selfTransport,
-      DEMO_SELF_NODE_ID,
-      transport => {
-        this.selfTransport = transport;
-        if (transport instanceof BleMeshTransport) {
-          this.selfEngine.setLocalNodeId(transport.getNodeId());
-        }
-        this.selfEngine.setTransport(transport);
-        this.watchRealPeers();
-      },
-      env
-    );
+    // Single in-flight attempt: concurrent callers share it, so overlapping
+    // triggers (startup, foreground, retry timer) can never stack upgrades.
+    // Note: callers arriving while the constructor's own attempt is still
+    // settling share its outcome; explicit callers should await one tick
+    // after construction if they need a fresh attempt with their own env.
+    if (this.bleUpgradeInFlight) return this.bleUpgradeInFlight;
+    const run = this.doBleUpgrade(env);
+    this.bleUpgradeInFlight = run;
+    try {
+      return await run;
+    } finally {
+      if (this.bleUpgradeInFlight === run) this.bleUpgradeInFlight = null;
+    }
+  }
+
+  private async doBleUpgrade(env?: BleEnvironment): Promise<boolean> {
+    let upgraded = false;
+    try {
+      upgraded = await upgradeToBleIfAvailable(
+        this.selfTransport,
+        DEMO_SELF_NODE_ID,
+        transport => {
+          this.selfTransport = transport;
+          if (transport instanceof BleMeshTransport) {
+            this.selfEngine.setLocalNodeId(transport.getNodeId());
+          }
+          this.selfEngine.setTransport(transport);
+          this.watchRealPeers();
+        },
+        env
+      );
+    } catch {
+      upgraded = false;
+    }
     // Truthful transport diagnostic: reflects the ACTUAL runtime instance,
     // never the desired one. Mock path keeps existing demo behavior.
     console.log(
-      `[BLE-DIAG] transport = ${this.selfTransport instanceof BleMeshTransport ? 'REAL_BLE' : 'MOCK'}`
+      `[BLE-DIAG] transport = ${this.selfTransport instanceof BleMeshTransport ? 'REAL_BLE' : 'MOCK'} (upgrade ${upgraded ? 'succeeded' : 'not applied'})`
     );
+    if (upgraded) {
+      this.bleRetryAttempt = 0;
+      this.clearBleRetry();
+    } else {
+      this.scheduleBleRetry(env);
+    }
     return upgraded;
+  }
+
+  private clearBleRetry(): void {
+    if (this.bleRetryTimer) {
+      clearTimeout(this.bleRetryTimer);
+      this.bleRetryTimer = null;
+    }
+  }
+
+  /**
+   * Schedule one bounded backoff retry after a failed upgrade. Stops after
+   * BLE_RETRY_MAX_ATTEMPTS timer retries; foreground returns can still
+   * trigger single guarded attempts. Timers are unref'd so unit tests and
+   * non-Android hosts never hang on them.
+   */
+  private scheduleBleRetry(env?: BleEnvironment): void {
+    this.clearBleRetry();
+    if (this.bleRetryAttempt >= DemoMeshNetwork.BLE_RETRY_MAX_ATTEMPTS) {
+      console.log('[BLE-DIAG] BLE upgrade backoff exhausted; waiting for app foreground');
+      return;
+    }
+    const delay = Math.min(
+      DemoMeshNetwork.BLE_RETRY_BASE_MS * 2 ** this.bleRetryAttempt,
+      DemoMeshNetwork.BLE_RETRY_MAX_MS
+    );
+    this.bleRetryAttempt++;
+    console.log(`[BLE-DIAG] BLE upgrade retry #${this.bleRetryAttempt} in ${delay}ms`);
+    this.bleRetryTimer = setTimeout(() => {
+      this.bleRetryTimer = null;
+      void this.enableNativeBle(env);
+    }, delay);
+    const maybeUnref = this.bleRetryTimer as unknown as { unref?: () => void };
+    if (typeof maybeUnref.unref === 'function') maybeUnref.unref();
+  }
+
+  /**
+   * Re-attempt the upgrade when the app returns to the foreground — the
+   * user may have granted Bluetooth permissions or toggled Bluetooth while
+   * away. Single guarded attempt per return; never a loop.
+   */
+  private attachForegroundRetry(): void {
+    if (this.foregroundRetryAttached) return;
+    try {
+      if (typeof document === 'undefined' || !document.addEventListener) return;
+      this.foregroundRetryAttached = true;
+      document.addEventListener('visibilitychange', () => {
+        try {
+          if (document.visibilityState === 'visible' &&
+            !(this.selfTransport instanceof BleMeshTransport)) {
+            console.log('[BLE-DIAG] app foregrounded; retrying BLE upgrade');
+            void this.enableNativeBle();
+          }
+        } catch {
+          // ignore listener races
+        }
+      });
+    } catch {
+      // non-DOM hosts (tests): no foreground signal available
+    }
   }
 
   /**
@@ -366,6 +483,11 @@ class DemoMeshNetwork {
         } catch {
           // One bad consumer must not break notification to the rest.
         }
+      }
+      // A newly connected real peer may unblock held SOS packets: re-drive
+      // every Store-Carry-Forward queue (idempotent; failures stay queued).
+      if (peerIds.length > 0) {
+        void this.resumeAll();
       }
     });
   }

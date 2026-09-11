@@ -39,25 +39,22 @@ export const KalyaniMap: React.FC<KalyaniMapProps> = ({
         attributionControl: false
       });
 
-      // Standard OpenStreetMap tiles
-      const osmTileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors'
+      // Bundled offline tiles FIRST: packaged under public/tiles (Kalyani
+      // corridor) and shipped inside the APK, so the map renders with
+      // Wi-Fi/mobile data OFF. Online OSM is only the per-tile fallback
+      // (errorTileUrl) for areas outside the bundled corridor — it is never
+      // requested first, so OSM policy-blocked tiles cannot cover the map.
+      // BASE_URL keeps the path correct on web root, GH Pages subpath, and
+      // the Capacitor https://localhost origin alike.
+      const base = import.meta.env.BASE_URL || '/';
+      const localTileLayer = L.tileLayer(`${base}tiles/{z}/{x}/{y}.png`, {
+        maxZoom: 18,
+        minZoom: 11,
+        attribution: '&copy; OpenStreetMap contributors',
+        errorTileUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
       });
 
-      // Offline fallback: if internet is unavailable, load from packaged local tiles
-      osmTileLayer.on('tileerror', (e: L.TileEvent) => {
-        const img = e.tile as HTMLImageElement | undefined;
-        if (img && !img.dataset.fallbackLoaded) {
-          img.dataset.fallbackLoaded = 'true';
-          const coords = (e as any).coords;
-          if (coords) {
-            img.src = `/tiles/${coords.z}/${coords.x}/${coords.y}.png`;
-          }
-        }
-      });
-
-      osmTileLayer.addTo(map);
+      localTileLayer.addTo(map);
 
       const markersGroup = L.layerGroup().addTo(map);
       markersLayerRef.current = markersGroup;
